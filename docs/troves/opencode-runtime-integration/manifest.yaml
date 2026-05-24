@@ -116,6 +116,15 @@ sources:
       - https://cefboud.com/posts/coding-agents-internals-opencode-deepdive/
       - https://www.webdong.dev/en/shortpost/opencode-server/
 
+  - id: session-in-session
+    type: github-issues+source-analysis
+    fetched: 2026-05-23
+    freshness-ttl: 30d
+    hash: a25d08428366ac9b93fe272ff83f168bfd5595a4d4a4d9d70456cf4ac9d86932
+    urls:
+      - https://github.com/anomalyco/opencode/issues/24747
+      - https://github.com/anomalyco/opencode/issues/16096
+
 referenced-by: []
 
 history:
@@ -123,3 +132,7 @@ history:
     date: 2026-04-25
     commit: "4d6289748cce7a12fee2ab171d639a613f75c016"
     sources: 7
+  - event: extended
+    date: 2026-05-23
+    commit: "d9bad44b2a567404b9068ca130049b3fdd4f7da3"
+    sources: 8
