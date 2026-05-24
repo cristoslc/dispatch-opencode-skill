@@ -14,3 +14,8 @@
 .agents/skills/
 __pycache__/
 .dispatch-opencode/
+.worktrees/
+.agents/design-check.log
+.agents/specwatch.log
+.agents/train-check.log
+.agents/search-snapshots/
