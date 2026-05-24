@@ -55,16 +55,17 @@ This also makes parallel-fanout cleaner: render N scripts under N task-id direct
 
 ## 4. Stall and error contract
 
-Six known headless-stall modes are documented (issue #17516, #16367, #13946, #8203, #1329, #10012); the field retro adds two more (silent stall on glm-5.1, `</think>` token leakage). A dispatcher must handle them — opencode does not.
+Seven known failure modes are documented (issues #17516, #16367, #13946, #8203, #1329, #10012, #24747); the field retro adds two more (silent stall on glm-5.1, ` response` token leakage). The seventh mode — session-in-session env-var pollution (issue #24747) — is specific to nested invocation from within opencode itself: `OPENCODE_SERVER_PASSWORD` and `OPENCODE_SERVER_USERNAME` leak to the child process, whose local-mode SDK client does not send auth headers, causing "Session not found". The fix: unset `OPENCODE_SERVER_PASSWORD` and `OPENCODE_SERVER_USERNAME` before nested `opencode run`.
 
 Defensive defaults the skill should bake in:
 
 - Wrap every `opencode run` invocation in `timeout` with a per-task SLA. Don't trust process exit alone.
+- **Unset `OPENCODE_SERVER_PASSWORD` and `OPENCODE_SERVER_USERNAME`** before every `opencode run` invocation (session-in-session mitigation).
 - Set `OPENCODE_DISABLE_AUTOCOMPACT=true` for headless dispatch (avoids the silent-exit-on-compaction class).
 - Set `OPENCODE_DISABLE_AUTOUPDATE=true` for unattended runs.
 - Set `--dangerously-skip-permissions` AND `permission: { "*": "allow" }` in config for non-interactive use.
 - Validate post-run: did the agent edit files? Is the working tree dirty in the expected paths? Did the JSON event stream end with `session.status: idle`? Treat any "no" as a stall and respawn or escalate.
-- Strip `</think>` blocks from captured stdout before persisting.
+- Strip ` response` blocks from captured stdout before persisting.
 - Don't trust frontmatter immutability — diff frontmatter post-run and revert drift mechanically.
 
 For Kimi K2 specifically: route through `@ai-sdk/openai-compatible` (not the built-in `openrouter` provider) or hit Moonshot/Groq directly.
@@ -95,9 +96,9 @@ The skill should:
 - Default to **`opencode run` per task**, with **`opencode serve` + SDK** as a documented opt-in for warm dispatch.
 - Require a verified, absolute `--cwd` for every invocation; refuse to launch otherwise.
 - Render dispatch as **on-disk scripts from templates**, not inline tool args.
-- Bake in the timeout + auto-compaction-off + auto-update-off + permissions-allow defaults.
+- Bake in the timeout + auto-compaction-off + auto-update-off + server-password-unset + permissions-allow defaults.
 - Surface the share/attach URL on every run for live inspection.
-- Provide a **post-run validator**: stream ended at idle, files edited, frontmatter undrifted, `</think>` stripped.
+- Provide a **post-run validator**: stream ended at idle, files edited, frontmatter undrifted, ` response` stripped.
 - Document the failure-mode mitigations explicitly so users who hit them find the fix in one place.
 
 Open questions for the design phase:
