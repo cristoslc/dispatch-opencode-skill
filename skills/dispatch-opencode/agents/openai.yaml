@@ -1,9 +1,0 @@
-# Codex App UI metadata and invocation policy.
-# See templates/runtimes/codex/README.md for full adapter docs.
-interface:
-  display_name: "Dispatch OpenCode"
-  short_description: "Route subagent tasks through opencode for broader model choice and live attach"
-  default_prompt: "Dispatch a subagent task through opencode"
-
-policy:
-  allow_implicit_invocation: false
