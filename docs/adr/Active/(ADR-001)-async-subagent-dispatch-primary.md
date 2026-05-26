@@ -1,5 +1,5 @@
 ---
-title: "Async .subagents/ lock-watch as primary dispatch mode; drop ACP"
+title: "Async .subagents/ lock-watch as primary dispatch mode; drop ACP and HTTP"
 artifact: ADR-001
 track: standing
 status: Active
@@ -32,11 +32,13 @@ Experience and analysis revealed:
 
 ## Decision
 
-**Adopt async file-based dispatch via `.subagents/` as the primary mode.** Dispatch ACP, CLI, and HTTP modes. The new architecture:
+**Adopt async file-based dispatch via `.subagents/` as the primary mode.** Drop ACP and HTTP transports; keep CLI as the invocation mechanism and wrap it in an async lock-watch protocol.
 
-1. **The parent writes** `prompt.md` and `script.sh` into `.subagents/<task-id>/`.
-2. **The subagent creates** `.subagents/<task-id>/.lock` (with PID) on start, deletes it on completion.
-3. **The subagent writes** `FINAL_OUTPUT.md` with a structured result.
+The architecture:
+
+1. **The parent writes** `prompt.md` and `start-subagent.sh` (an `opencode run` invocation) into `.subagents/<task-id>/`.
+2. **The parent spawns** the script in the background (`bash start-subagent.sh &`), capturing PID.
+3. **The subagent** (`opencode run`) creates `.subagents/<task-id>/.lock` (with PID) on start, deletes it on completion.
 4. **The parent polls** `stat .lock` — deleted means done, stale mtime means stalled.
 5. **The parent reads** only `FINAL_OUTPUT.md` for the result — `stdout.log` is for troubleshooting only.
 
@@ -45,9 +47,21 @@ Experience and analysis revealed:
 | Mode | Status | Rationale |
 |------|--------|-----------|
 | ACP | Dropped | Most complex, least used. Permission relay unused in practice. |
-| CLI | Dropped | Same sync model as ACP. Async subsumes it. |
 | HTTP | Dropped | Same sync model. Permission hang bug (#16367) unfixable without ACP. |
-| **async** | **New primary** | File-based lock-watch. Zero protocol overhead. |
+| CLI | **Kept as transport** | `opencode run` is the invocation mechanism. Wrapped in async lock-watch protocol. |
+| **async CLI** | **New primary** | CLI transport + `.subagents/` signaling + lock-watch polling. |
+
+### How the async wrapper works
+
+The parent no longer blocks on process exit. Instead:
+
+1. Write the dispatch script to `.subagents/<task-id>/start-subagent.sh` (same `opencode run` invocation as today, but the script writes `.lock` on start and deletes it on exit).
+2. Spawn: `bash .subagents/<task-id>/start-subagent.sh &`
+3. Poll loop: `test -f .subagents/<task-id>/.lock` — while it exists, the subagent is running.
+4. Stall detection: if `.lock` mtime is older than the timeout threshold, kill the process and mark as stalled.
+5. Completion: lock deleted → read `FINAL_OUTPUT.md`.
+
+The parent never reads `stdout.log` unless `FINAL_OUTPUT.md` indicates a problem. `events.jsonl` is still written for post-mortem debugging.
 
 ### What about --dangerously-skip-permissions?
 
@@ -73,10 +87,10 @@ These survive unchanged. `verify-cwd.sh` still runs before dispatch. Artifact la
 - Pros: Backward compatibility.
 - Cons: Four dispatch paths to maintain. The skill's SKILL.md would be even longer. ACP/CLI/HTTP have no active users — maintaining them is pure drag.
 
-### Adopt only async, keep a sync CLI fallback for simple cases
+### Adopt only async, drop ACP and HTTP while keeping CLI transport
 
-- Pros: Simple one-off dispatches don't need the async machinery.
-- Cons: The async machinery is lightweight (one directory, a lock file, a poll loop). A sync CLI fallback adds a second code path with no real benefit. The parent can always `opencode run` directly if it wants sync — dispatch-opencode doesn't need a wrapper for that.
+- Pros: Single invocation mechanism (CLI). Async wrapping adds minimal overhead. CLI is the simplest, most widely used transport.
+- Cons: `--dangerously-skip-permissions` is still needed (but we already use it). No live attach via ACP's embedded server (but `--share` URL still works).
 
 ## Consequences
 
