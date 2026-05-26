@@ -58,8 +58,9 @@ The parent no longer blocks on process exit. Instead:
 1. Write the dispatch script to `.subagents/<task-id>/start-subagent.sh` — checks `OPENCODE_SERVER_URL`: if set, uses `--attach` (child is client of parent's serve daemon); if absent, falls back to local `--dir` mode (Claude Code/Codex as parent).
 2. Spawn: `bash .subagents/<task-id>/start-subagent.sh &`
 3. Poll loop: `test -f .subagents/<task-id>/.lock` — while it exists, the subagent is running.
-4. Stall detection: if `.lock` mtime is older than the timeout threshold, kill the process and mark as stalled.
+4. Stall detection: if `.lock` mtime is older than the timeout threshold, kill the process and mark as stalled. The `scripts/cleanup-stale.sh` script performs this scan and cleanup across all tasks in `.subagents/`, handling both dead-PID and hung-process cases.
 5. Completion: lock deleted → read `FINAL_OUTPUT.md`.
+6. Orphan cleanup: `scripts/cleanup-stale.sh` runs pre-dispatch and can be invoked manually or scheduled to clean locks left by crashed sessions.
 
 The parent never reads `stdout.log` unless `FINAL_OUTPUT.md` indicates a problem. `events.jsonl` is still written for post-mortem debugging.
 
