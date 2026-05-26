@@ -3,12 +3,13 @@ title: "dispatch-opencode v2 system contracts"
 artifact: DESIGN-001
 track: standing
 domain: system
-status: Active
+status: Superseded
 author: cristoslc
 created: 2026-04-29
-last-updated: 2026-04-29
-supeded-by: ""
-linked-artifacts: []
+last-updated: 2026-05-25
+superseded-by: ADR-001
+linked-artifacts:
+  - ADR-001
 artifact-refs: []
 sourcecode-refs:
   - path: skills/dispatch-opencode/bin/dispatch-opencode
@@ -242,3 +243,4 @@ Claude Code, Codex, Gemini, and Cursor each have a template under `templates/run
 | Phase | Date | Commit | Notes |
 |-------|------|--------|-------|
 | Active | 2026-04-29 | — | Initial creation — user-requested, fully developed in-session. |
+| Superseded | 2026-05-25 | — | Superseded by ADR-001 — ACP/acpx approach replaced with async .subagents/ lock-watch dispatch. |
