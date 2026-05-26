@@ -239,6 +239,10 @@ Baked in by the skill's ACP client and rendered artifacts.
   unattended runs deterministic.
 - `OPENCODE_SERVER_PASSWORD` required (refuse to start ACP backend
   without one). The fixed-port server is otherwise unauthenticated.
+- **`OPENCODE_SERVER_PASSWORD` and `OPENCODE_SERVER_USERNAME` unset before
+  every `opencode run` invocation** in CLI-mode templates (session-in-session
+  mitigation for issue #24747). The child would otherwise inherit these from
+  the parent session, causing "Session not found".
 - Per-kind permission allowlist (see above). No wildcard allow, no
   `--dangerously-skip-permissions`.
 - Post-run `</think>` strip on `stdout.log` and `events.jsonl`
@@ -375,9 +379,9 @@ when the port is fixed.
 
 ## References
 
-- Trove: `opencode-runtime-integration@4d62897` —
+- Trove: `opencode-runtime-integration@d9bad44` —
   `docs/troves/opencode-runtime-integration/synthesis.md` and source
-  files. Failure-mode catalogue at
+  files (8 sources). Failure-mode catalogue at
   `docs/troves/opencode-runtime-integration/sources/failure-modes/failure-modes.md`.
 - ACP source: `packages/opencode/src/cli/cmd/acp.ts` and
   `packages/opencode/src/acp/agent.ts` in github.com/sst/opencode.

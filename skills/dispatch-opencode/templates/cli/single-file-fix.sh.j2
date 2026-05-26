@@ -20,6 +20,9 @@ TARGET_FILE={{ target_file | shellquote }}
 cd "$CWD"
 
 # Defensive defaults — see SKILL.md "Default failure-mode mitigations".
+# Unset parent-session env vars that leak into nested opencode run,
+# causing "Session not found" (issue #24747).
+unset OPENCODE_SERVER_PASSWORD OPENCODE_SERVER_USERNAME
 export OPENCODE_DISABLE_AUTOCOMPACT=true
 export OPENCODE_DISABLE_AUTOUPDATE=true
 {% if extra_env %}

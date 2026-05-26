@@ -54,6 +54,10 @@ kimi-k2-thinking observed corrupting words during full-file rewrites: `efc2e8a â
 
 <https://github.com/sst/opencode/issues/4251>. Running multiple sessions on different repos from one opencode instance caused cross-repo file modification. **Mitigation:** one server per CWD, or use git worktrees with `--dir` per session. No built-in file locking.
 
+## Session-in-session env-var pollution (issue #24747)
+
+<https://github.com/anomalyco/opencode/issues/24747>. When `opencode run` is invoked from within an opencode session, `OPENCODE_SERVER_PASSWORD` and `OPENCODE_SERVER_USERNAME` leak to the child. The child's in-process local server requires auth (the parent's credentials are set in the env), but the local-mode SDK client does not send auth headers â€” so session creation fails with "Session not found". **Mitigation:** unset `OPENCODE_SERVER_PASSWORD` and `OPENCODE_SERVER_USERNAME` before nested `opencode run`. Full analysis at `docs/troves/opencode-runtime-integration/sources/session-in-session/session-in-session.md`.
+
 ## Sources
 
 - <https://github.com/sst/opencode/issues/17516>
@@ -63,4 +67,5 @@ kimi-k2-thinking observed corrupting words during full-file rewrites: `efc2e8a â
 - <https://github.com/sst/opencode/issues/1329>
 - <https://github.com/anomalyco/opencode/issues/10012>
 - <https://github.com/sst/opencode/issues/4251>
+- <https://github.com/anomalyco/opencode/issues/24747>
 - Field observation: `~/Documents/code/research-keeper/docs/swain-retro/2026-04-25-multi-round-design-iteration.md`
