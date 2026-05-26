@@ -1,0 +1,70 @@
+id: async-subagent-dispatch
+created: 2026-05-25
+refreshed: 2026-05-25
+tags:
+  - subagent
+  - orchestration
+  - async
+  - lock-file
+  - context-packet
+  - coordinator-pattern
+  - parallel-dispatch
+description: >
+  Source materials for async subagent dispatch patterns — context packets,
+  lock-file completion signaling, FINAL OUTPUT contracts, and comparison
+  against industry approaches (Claude Code, opencode, mattpocock,
+  superpowers, and community orchestration patterns).
+
+freshness-ttl-defaults:
+  web-articles: 90d
+  blog: 180d
+  github-issue: 30d
+
+snapshot-evidence: deferred
+snapshot-evidence-note: >
+  Sources are URL-cited and content-summarized. Re-run with
+  export-snapshot.sh on strict evidence requirements.
+
+sources:
+  - id: orchestrator-pattern
+    type: web-articles
+    fetched: 2026-05-25
+    freshness-ttl: 90d
+    hash: 04d74c91bb63aa5319142b7d9b881063d56f37583a3f5e675431db9a45423a32
+    urls:
+      - https://claude.com/blog/multi-agent-coordination-patterns
+      - https://claudefa.st/blog/guide/agents/sub-agent-best-practices
+      - https://claudefa.st/blog/guide/agents/agent-patterns
+      - https://medium.com/@neonmaxima/claude-code-subagents-how-the-task-tool-actually-distributes-work-e5fe19f48584
+      - https://cefboud.com/posts/coding-agents-internals-opencode-deepdive/
+      - https://www.mindstudio.ai/blog/claude-code-split-and-merge-pattern-sub-agents
+      - https://dev.to/ajbuilds/the-coordinator-subagent-pattern-the-foundation-every-claude-multi-agent-system-is-built-on-17o6
+
+  - id: context-packet
+    type: web-articles
+    fetched: 2026-05-25
+    freshness-ttl: 90d
+    hash: e5563e7bfa887419228f02d9780fd63aabef27ea67644ab3d858df23c08b32bb
+    urls:
+      - https://www.channel.tel/blog/claude-code-subagents-orchestrator-pattern
+      - https://gist.github.com/ppries/f07fd6316bbd45807dd7a1896555b05b
+      - https://claudefa.st/blog/guide/agents/sub-agent-best-practices
+      - https://www.tembo.io/blog/claude-code-subagents
+
+  - id: superpowers
+    type: web-articles+issues
+    fetched: 2026-05-25
+    freshness-ttl: 90d
+    hash: 074ed24c6acd2e6d77576acba201319b72efe72fe96b9ab8484224b5d9722e73
+    urls:
+      - https://github.com/obra/superpowers/issues/469
+      - https://github.com/mattpocock/agent-rules-books
+      - https://www.shareuhack.com/en/posts/claude-code-community-skills-agent-fleet-guide-2026
+
+referenced-by: []
+
+history:
+  - event: created
+    date: 2026-05-25
+    commit: "--"
+    sources: 3
