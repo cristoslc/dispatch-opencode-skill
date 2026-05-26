@@ -20,9 +20,10 @@ TARGET_FILE={{ target_file | shellquote }}
 cd "$CWD"
 
 # Defensive defaults — see SKILL.md "Default failure-mode mitigations".
-# Unset parent-session env vars that leak into nested opencode run,
-# causing "Session not found" (issue #24747).
-unset OPENCODE_SERVER_PASSWORD OPENCODE_SERVER_USERNAME
+# Attach to the parent's serve daemon (SPIKE-001). This avoids the
+# session-in-session env-var leak (issue #24747) — the child is an HTTP
+# client of the parent's server, never spawning its own in-process server.
+SERVER_URL="${OPENCODE_SERVER_URL:-http://localhost:4096}"
 export OPENCODE_DISABLE_AUTOCOMPACT=true
 export OPENCODE_DISABLE_AUTOUPDATE=true
 {% if extra_env %}
@@ -55,6 +56,8 @@ else
   TIMEOUT_PREFIX=()
 fi
 "${TIMEOUT_PREFIX[@]+"${TIMEOUT_PREFIX[@]}"}" opencode run \
+  --attach "$SERVER_URL" \
+  --password "$OPENCODE_SERVER_PASSWORD" \
   --dir "$CWD" \
   --model "$MODEL" \
   --agent "$AGENT" \

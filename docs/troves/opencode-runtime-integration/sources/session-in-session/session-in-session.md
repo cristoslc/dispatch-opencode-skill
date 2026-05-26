@@ -44,9 +44,9 @@ The `OPENCODE_SERVER_PASSWORD` var is the only one that actively breaks nested `
 
 Issue **#16096** was the inverse: `opencode run --attach` sending prompts to an external server also failed to pass auth headers. Fixed in **PR #16097** by adding `ServerAuth.headers({ password, username })` to the attach path (`run.ts:652-655`). The local-mode path (`run.ts:692-696`) was intentionally left without auth headers — it was designed for environments where `OPENCODE_SERVER_PASSWORD` is not set. The session-in-session bug is a gap in that design assumption.
 
-## Fix
+## Fix (v1 — unset env vars)
 
-Unset the leaking vars before invoking the child:
+The original mitigation was to unset the leaking vars before invoking the child:
 
 ```bash
 OPENCODE_SERVER_PASSWORD= OPENCODE_SERVER_USERNAME= opencode run ...
@@ -58,7 +58,23 @@ Or more aggressively, clear all opencode vars:
 env -u OPENCODE_SERVER_PASSWORD -u OPENCODE_SERVER_USERNAME opencode run ...
 ```
 
-The dispatch-opencode skill's CLI template must do this before every `opencode run` invocation.
+However, this approach means the child spawns its own in-process server (random port), making its session invisible to the operator.
+
+## Fix (v2 — preferred: use --attach)
+
+SPIKE-001 established a better approach: use `opencode run --attach` instead of the default local mode. The child connects to the parent's serve daemon as an HTTP client, never spawning its own in-process server. This avoids the env-var leak entirely — the parent's `OPENCODE_SERVER_PASSWORD` is used correctly by the child via the `--password` argument, not inherited as an environment conflict.
+
+```bash
+SERVER_URL="${OPENCODE_SERVER_URL:-http://localhost:4096}"
+opencode run --attach "$SERVER_URL" --password "$OPENCODE_SERVER_PASSWORD" ...
+```
+
+Benefits over the unset approach:
+- Child sessions are visible on the parent's serve daemon — operator can `opencode attach http://localhost:4096` to see all background sessions.
+- No env var manipulation needed.
+- The child's auth headers are sent explicitly as CLI arguments, not inherited from environment.
+
+The `--attach` approach also avoids the earlier auth gap (issue #16096, fixed in PR #16097) because the `ServerAuth.headers()` call in the attach path (`run.ts:652-655`) correctly passes the password from the CLI argument.
 
 ## Alternative mitigations considered
 

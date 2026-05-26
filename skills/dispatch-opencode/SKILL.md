@@ -239,10 +239,10 @@ Baked in by the skill's ACP client and rendered artifacts.
   unattended runs deterministic.
 - `OPENCODE_SERVER_PASSWORD` required (refuse to start ACP backend
   without one). The fixed-port server is otherwise unauthenticated.
-- **`OPENCODE_SERVER_PASSWORD` and `OPENCODE_SERVER_USERNAME` unset before
-  every `opencode run` invocation** in CLI-mode templates (session-in-session
-  mitigation for issue #24747). The child would otherwise inherit these from
-  the parent session, causing "Session not found".
+- **CLI-mode templates attach to the parent's serve daemon** using
+  `--attach "$SERVER_URL" --password "$OPENCODE_SERVER_PASSWORD"` (SPIKE-001).
+  The child is an HTTP client of the parent server, never spawning its own
+  in-process server — avoids the session-in-session env-var leak (issue #24747).
 - Per-kind permission allowlist (see above). No wildcard allow, no
   `--dangerously-skip-permissions`.
 - Post-run `</think>` strip on `stdout.log` and `events.jsonl`

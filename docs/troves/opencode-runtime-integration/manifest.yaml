@@ -120,7 +120,7 @@ sources:
     type: github-issues+source-analysis
     fetched: 2026-05-23
     freshness-ttl: 30d
-    hash: a25d08428366ac9b93fe272ff83f168bfd5595a4d4a4d9d70456cf4ac9d86932
+    hash: da4e537cef8db746642de9cfdd141a5dc5b331bbb557feeb23c21f87f6ba8818
     urls:
       - https://github.com/anomalyco/opencode/issues/24747
       - https://github.com/anomalyco/opencode/issues/16096
