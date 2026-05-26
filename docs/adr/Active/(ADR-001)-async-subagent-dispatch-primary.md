@@ -55,13 +55,17 @@ The architecture:
 
 The parent no longer blocks on process exit. Instead:
 
-1. Write the dispatch script to `.subagents/<task-id>/start-subagent.sh` (same `opencode run` invocation as today, but the script writes `.lock` on start and deletes it on exit).
+1. Write the dispatch script to `.subagents/<task-id>/start-subagent.sh` — an `opencode run --attach` invocation using the parent's server URL and password (sourced from `OPENCODE_SERVER_URL` and `OPENCODE_SERVER_PASSWORD` env vars, not hardcoded).
 2. Spawn: `bash .subagents/<task-id>/start-subagent.sh &`
 3. Poll loop: `test -f .subagents/<task-id>/.lock` — while it exists, the subagent is running.
 4. Stall detection: if `.lock` mtime is older than the timeout threshold, kill the process and mark as stalled.
 5. Completion: lock deleted → read `FINAL_OUTPUT.md`.
 
 The parent never reads `stdout.log` unless `FINAL_OUTPUT.md` indicates a problem. `events.jsonl` is still written for post-mortem debugging.
+
+The `--attach` flag avoids the session-in-session env-var leak entirely (issue #24747) — the child is a client of the parent's serve daemon, sending auth via the `--password` argument rather than inheriting `OPENCODE_SERVER_PASSWORD` in its environment. The child never spawns an in-process server, so the auth conflict that caused "Session not found" doesn't arise.
+
+All background subagent sessions are visible on the serve daemon at port 4096. The operator can `opencode attach http://localhost:4096` from another terminal and see every active session.
 
 ### What about --dangerously-skip-permissions?
 
