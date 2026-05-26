@@ -20,10 +20,17 @@ TARGET_FILE={{ target_file | shellquote }}
 cd "$CWD"
 
 # Defensive defaults — see SKILL.md "Default failure-mode mitigations".
-# Attach to the parent's serve daemon (SPIKE-001). This avoids the
-# session-in-session env-var leak (issue #24747) — the child is an HTTP
-# client of the parent's server, never spawning its own in-process server.
-SERVER_URL="${OPENCODE_SERVER_URL:-http://localhost:4096}"
+# When a central server URL is available, use --attach (SPIKE-001). The
+# child is an HTTP client, never spawning its own in-process server —
+# avoids the session-in-session env-var leak (issue #24747). When no server
+# is available (e.g., Claude Code as parent), fall back to local --dir mode.
+if [ -n "${OPENCODE_SERVER_URL:-}" ]; then
+  ATTACH_ARGS=(--attach "$OPENCODE_SERVER_URL" --password "$OPENCODE_SERVER_PASSWORD")
+else
+  # Local mode (no central server). OPENCODE_SERVER_PASSWORD is absent,
+  # so the session-in-session leak cannot trigger.
+  ATTACH_ARGS=(--dir "$CWD")
+fi
 export OPENCODE_DISABLE_AUTOCOMPACT=true
 export OPENCODE_DISABLE_AUTOUPDATE=true
 {% if extra_env %}
@@ -56,9 +63,7 @@ else
   TIMEOUT_PREFIX=()
 fi
 "${TIMEOUT_PREFIX[@]+"${TIMEOUT_PREFIX[@]}"}" opencode run \
-  --attach "$SERVER_URL" \
-  --password "$OPENCODE_SERVER_PASSWORD" \
-  --dir "$CWD" \
+  "${ATTACH_ARGS[@]}" \
   --model "$MODEL" \
   --agent "$AGENT" \
   --format json \

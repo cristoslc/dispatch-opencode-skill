@@ -55,7 +55,7 @@ The architecture:
 
 The parent no longer blocks on process exit. Instead:
 
-1. Write the dispatch script to `.subagents/<task-id>/start-subagent.sh` — an `opencode run --attach` invocation using the parent's server URL and password (sourced from `OPENCODE_SERVER_URL` and `OPENCODE_SERVER_PASSWORD` env vars, not hardcoded).
+1. Write the dispatch script to `.subagents/<task-id>/start-subagent.sh` — checks `OPENCODE_SERVER_URL`: if set, uses `--attach` (child is client of parent's serve daemon); if absent, falls back to local `--dir` mode (Claude Code/Codex as parent).
 2. Spawn: `bash .subagents/<task-id>/start-subagent.sh &`
 3. Poll loop: `test -f .subagents/<task-id>/.lock` — while it exists, the subagent is running.
 4. Stall detection: if `.lock` mtime is older than the timeout threshold, kill the process and mark as stalled.

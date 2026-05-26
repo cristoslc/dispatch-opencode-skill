@@ -239,10 +239,14 @@ Baked in by the skill's ACP client and rendered artifacts.
   unattended runs deterministic.
 - `OPENCODE_SERVER_PASSWORD` required (refuse to start ACP backend
   without one). The fixed-port server is otherwise unauthenticated.
-- **CLI-mode templates attach to the parent's serve daemon** using
-  `--attach "$SERVER_URL" --password "$OPENCODE_SERVER_PASSWORD"` (SPIKE-001).
-  The child is an HTTP client of the parent server, never spawning its own
-  in-process server — avoids the session-in-session env-var leak (issue #24747).
+- **CLI-mode templates auto-detect their execution mode.** When
+  `OPENCODE_SERVER_URL` is set, they use `--attach $OPENCODE_SERVER_URL
+  --password $OPENCODE_SERVER_PASSWORD` — the child is an HTTP client of the
+  parent's serve daemon, avoiding the session-in-session env-var leak (issue
+  #24747) and keeping sessions visible for operator attach (SPIKE-001). When
+  `OPENCODE_SERVER_URL` is absent (e.g., Claude Code as parent), they fall
+  back to local `--dir` mode — the child spawns an in-process server, which
+  is safe because `OPENCODE_SERVER_PASSWORD` isn't set in that environment.
 - Per-kind permission allowlist (see above). No wildcard allow, no
   `--dangerously-skip-permissions`.
 - Post-run `</think>` strip on `stdout.log` and `events.jsonl`
