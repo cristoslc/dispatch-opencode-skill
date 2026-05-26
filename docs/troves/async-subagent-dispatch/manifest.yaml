@@ -12,7 +12,8 @@ tags:
 description: >
   Source materials for async subagent dispatch patterns — context packets,
   lock-file completion signaling, FINAL OUTPUT contracts, and comparison
-  against industry approaches (Claude Code, opencode, mattpocock,
+  against industry approaches (Copilot CLI /delegate, Codex run_in_background,
+  Antigravity async subagents, Claude Code, opencode, mattpocock,
   superpowers, and community orchestration patterns).
 
 freshness-ttl-defaults:
@@ -61,6 +62,19 @@ sources:
       - https://github.com/mattpocock/agent-rules-books
       - https://www.shareuhack.com/en/posts/claude-code-community-skills-agent-fleet-guide-2026
 
+  - id: async-platforms
+    type: web-articles+docs
+    fetched: 2026-05-25
+    freshness-ttl: 90d
+    hash: 1f3c30cc8de0234a580b0e718135a4229af6f34d69b3f692010dfcffa692005e
+    urls:
+      - https://deepwiki.com/github/copilot-cli/3.8-async-task-delegation
+      - https://deepwiki.com/github/copilot-cli/3.6-agent-modes-and-subagents
+      - https://github.com/anthropics/claude-code/issues/50572
+      - https://dev.to/arindam_1729/antigravity-cli-a-hands-on-guide-to-googles-terminal-coding-agent-5bc7
+      - https://github.blog/changelog/2025-10-28-github-copilot-cli-use-custom-agents-and-delegate-to-copilot-coding-agent/
+      - https://bartwullems.blogspot.com/2026/03/github-copilot-cli-tips-tricks-part-5.html
+
 referenced-by: []
 
 history:
@@ -68,3 +82,7 @@ history:
     date: 2026-05-25
     commit: "2bbac2c0976a49489d0b1f9bbe8435d409bc50b9"
     sources: 3
+  - event: extended
+    date: 2026-05-25
+    commit: "--"
+    sources: 4
