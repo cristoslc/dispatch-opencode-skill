@@ -3,7 +3,8 @@
 #
 # Called after the agent reads FINAL_OUTPUT.md and merges the work.
 # Removes .lock, worktree symlink, git worktree, and task directory.
-# Does NOT force-remove — the worktree should be clean after merge.
+# Tries clean removal first; if the worktree has uncommitted changes,
+# forces removal with a warning.
 #
 # Usage:
 #   subagent-cleanup.sh --task-id <id> --root <project-root>
@@ -47,8 +48,13 @@ rm -f "$TASK_DIR/.lock"
 # Remove git worktree if present
 WT_DIR="$TASK_DIR/worktree"
 if [ -d "$WT_DIR" ]; then
-  git -C "$ROOT" worktree remove "$WT_DIR" 2>/dev/null \
-    || err "git worktree remove failed (may have uncommitted changes — use subagent-abandon.sh)"
+  if git -C "$ROOT" worktree remove "$WT_DIR" 2>/dev/null; then
+    : # clean removal succeeded
+  else
+    printf 'subagent-cleanup: worktree has uncommitted changes, force-removing task=%s\n' "$TASK_ID" >&2
+    git -C "$ROOT" worktree remove --force "$WT_DIR" 2>/dev/null \
+      || err "git worktree remove --force failed for task=$TASK_ID"
+  fi
 fi
 
 # Remove task directory
