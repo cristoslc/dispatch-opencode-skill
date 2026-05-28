@@ -1,5 +1,5 @@
 # AGENTS.md
-Read **[PURPOSE.md](../../PURPOSE.md)** for this project's identity, worldview, and foundational principles.
+Read **[PURPOSE.md](PURPOSE.md)** for this project's identity, worldview, and foundational principles.
 
 <!-- swain governance — do not edit this block manually -->
 

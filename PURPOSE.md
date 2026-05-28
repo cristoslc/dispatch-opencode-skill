@@ -1,0 +1,3 @@
+# Purpose
+
+dispatch-opencode is a tool-agnostic skill that lets any agentic CLI — Claude Code, Codex, Gemini, opencode itself — dispatch subagent tasks through opencode's `opencode run` CLI using async file-based signaling. The orchestrator owns all coordination (deciding what is ready, firing tasks, reading results, kicking off the next wave) while subagents stay single-responsibility and run on the cheapest model that can do the job. Every dispatch produces on-disk artifacts under `.subagents/` for audit and replay, and git worktrees give each subagent an isolated working tree so parallel edits never conflict.
