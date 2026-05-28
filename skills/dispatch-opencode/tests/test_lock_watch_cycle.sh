@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # test_lock_watch_cycle.sh — smoke test for the full async lock-watch cycle.
 #
-# Uses scripts/dispatch.sh to dispatch a single-file-fix task, verifies:
+# Uses dispatch.sh to dispatch a single-file-fix task, verifies:
 #   1. .lock file created while running
 #   2. FINAL_OUTPUT.md written on completion
-#   3. exit code 0
-#   4. Session visible on serve daemon (when OPENCODE_SERVER_URL is set)
+#   3. JSON output valid
+#   4. events.jsonl has content
 #
 # Usage: bash tests/test_lock_watch_cycle.sh [--keep]
 
@@ -14,16 +14,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 DISPATCH="$SKILL_DIR/scripts/dispatch.sh"
+CLEANUP="$SKILL_DIR/scripts/subagent-cleanup.sh"
 KEEP=0; [ "${1:-}" = "--keep" ] && KEEP=1
 
 err() { printf 'test: FAIL %s\n' "$*" >&2; exit 1; }
 ok()  { printf 'test: PASS %s\n' "$*"; }
 
-SERVER_URL="${OPENCODE_SERVER_URL:-http://localhost:4096}"
-
 WORK=$(mktemp -d /tmp/oc-lockwatch.XXXXXX)
-LOG=$(mktemp)
-trap '[ "$KEEP" -eq 1 ] && echo "kept $WORK, $LOG" || rm -rf "$WORK" "$LOG"' EXIT
+trap '[ "$KEEP" -eq 1 ] && echo "kept $WORK" || rm -rf "$WORK"' EXIT
 
 cd "$WORK"
 git init -q -b main
@@ -46,82 +44,49 @@ git add -A && git commit -q -m fixture
 
 echo "test: dispatching single-file-fix via dispatch.sh..."
 
-# Run dispatch, capture events.jsonl path for session extraction
-"$DISPATCH" \
-  single-file-fix \
-  "$WORK" \
-  "ollama-cloud/deepseek-v4-flash:cloud" \
-  "build" \
-  "$WORK/prompt.md" \
-  "src/foo.py" \
-  --timeout 120 \
-  > "$LOG" 2>&1
+OUT=$("$DISPATCH" \
+  --root "$WORK" \
+  --cwd "$WORK" \
+  --kind single-file-fix \
+  --model "ollama-cloud/deepseek-v4-flash:cloud" \
+  --agent build \
+  --prompt-file "$WORK/prompt.md" \
+  --target src/foo.py \
+  --task-id lockwatch-1 \
+  2>/dev/null) || err "dispatch.sh failed"
 
-EXIT=$?
-echo "--- dispatch output ---"
-cat "$LOG" | sed 's/^/  /'
+# Parse JSON output
+TASK_DIR=$(echo "$OUT" | python3 -c "import json,sys; print(json.load(sys.stdin)['task_dir'])" 2>/dev/null) \
+  || err "JSON output invalid: $OUT"
 
-# 1. Check exit code
-[ "$EXIT" -eq 0 ] || err "dispatch exited $EXIT (expected 0)"
-ok "dispatch exited 0"
+LOCKFILE=$(echo "$OUT" | python3 -c "import json,sys; print(json.load(sys.stdin)['lockfile'])" 2>/dev/null)
 
-# 2. Find the task dir from the log
-TASK_LINE=$(grep 'task_id=' "$LOG" | head -1)
-TASK_ID=$(echo "$TASK_LINE" | grep -o 'task_id=[^ ]*' | cut -d= -f2)
-TASK_DIR_LINE=$(grep 'dir=' "$LOG" | head -1)
-TASK_DIR=$(echo "$TASK_DIR_LINE" | grep -o 'dir=[^ ]*' | cut -d= -f2)
-if [ -z "$TASK_DIR" ] || [ ! -d "$TASK_DIR" ]; then
-  err "could not find task dir"
-fi
-ok "task dir: $TASK_DIR"
+ok "dispatch returned valid JSON"
+[ -d "$TASK_DIR" ] || err "task dir not created"
+ok "task dir exists: $(basename "$TASK_DIR")"
 
-# 3. Check .lock is gone (cleaned up on completion)
-if [ -f "$TASK_DIR/.lock" ]; then
-  err ".lock still exists after completion"
+# Poll for completion
+for i in $(seq 1 60); do
+  [ ! -f "$LOCKFILE" ] && break
+  sleep 2
+done
+
+if [ -f "$LOCKFILE" ]; then
+  err ".lock still exists after 120s"
 fi
 ok ".lock cleaned up"
 
-# 4. Check FINAL_OUTPUT.md exists and has exit_code: 0
-if [ ! -f "$TASK_DIR/FINAL_OUTPUT.md" ]; then
-  err "FINAL_OUTPUT.md not found"
-fi
+[ -f "$TASK_DIR/FINAL_OUTPUT.md" ] || err "FINAL_OUTPUT.md not found"
+ok "FINAL_OUTPUT.md present"
+
 grep -q 'exit_code: 0' "$TASK_DIR/FINAL_OUTPUT.md" || err "exit_code not 0 in FINAL_OUTPUT.md"
 ok "FINAL_OUTPUT.md has exit_code: 0"
 
-# 5. Check events.jsonl exists and has content
 [ -s "$TASK_DIR/events.jsonl" ] || err "events.jsonl missing or empty"
 ok "events.jsonl has content"
 
-# 6. Verify src/foo.py was fixed
-FOO_CONTENT=$(cat "$WORK/src/foo.py")
-if echo "$FOO_CONTENT" | grep -q 'a + b'; then
-  ok "src/foo.py was fixed (a - b → a + b)"
-else
-  echo "test: NOTE src/foo.py not fixed this run (model variability)"
-fi
-
-# 7. Optional: verify session visibility on serve daemon
-if [ -n "${OPENCODE_SERVER_URL:-}" ]; then
-  SESSION_ID=$(grep -o '"sessionID":"[^"]*"' "$TASK_DIR/events.jsonl" | head -1 | cut -d'"' -f4 || echo "")
-  if [ -n "$SESSION_ID" ]; then
-    echo "test: session $SESSION_ID — check on server..."
-    FOUND=$(curl -s -u "opencode:$OPENCODE_SERVER_PASSWORD" \
-      "$SERVER_URL/session" 2>/dev/null \
-      | python3 -c "
-import json, sys
-try:
-    for s in json.load(sys.stdin):
-        if s.get('id') == '$SESSION_ID':
-            print('found')
-            sys.exit(0)
-except: pass
-" 2>/dev/null || true)
-    if [ "$FOUND" = "found" ]; then
-      ok "session $SESSION_ID visible on serve daemon"
-    else
-      echo "test: NOTE session $SESSION_ID not found on server (may have been cleaned up)"
-    fi
-  fi
-fi
+"$CLEANUP" --task-id lockwatch-1 --root "$WORK" 2>/dev/null || err "cleanup failed"
+[ ! -d "$TASK_DIR" ] || err "task dir still exists after cleanup"
+ok "cleanup removed task dir"
 
 echo "test: all checks passed"

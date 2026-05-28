@@ -1,36 +1,32 @@
 #!/usr/bin/env bash
 # Rendered dispatch script — headless-spike
 #
-# Read-only investigation. Writes .lock on start, FINAL_OUTPUT.md on completion,
-# deletes .lock on exit. --agent defaults to explore (opencode's read-only agent).
+# Read-only investigation. Writes .lock on start, FINAL_OUTPUT.md on
+# completion, deletes .lock on exit.
 set -uo pipefail
 
-TASK_DIR="$(cd "$(dirname "$0")" && pwd)"
+TASK_DIR={{ task_dir | shellquote }}
 TASK_ID={{ task_id | shellquote }}
 GENERATED_AT={{ generated_at | shellquote }}
 CWD={{ cwd | shellquote }}
 MODEL={{ model | shellquote }}
 AGENT={{ agent | shellquote }}
-TIMEOUT_SEC={{ timeout_sec | shellquote }}
 REPORT_PATH={{ report_path | shellquote }}
-
-cd "$CWD"
 
 echo "PID=$$" > "$TASK_DIR/.lock"
 
 export OPENCODE_DISABLE_AUTOCOMPACT=true
 export OPENCODE_DISABLE_AUTOUPDATE=true
-# Unset to prevent session-in-session leak when running inside opencode
 unset OPENCODE_SERVER_PASSWORD
 
 echo "[dispatch-opencode] task_id=$TASK_ID generated=$GENERATED_AT"
 echo "[dispatch-opencode] cwd=$CWD"
-echo "[dispatch-opencode] model=$MODEL agent=$AGENT timeout=${TIMEOUT_SEC}s"
+echo "[dispatch-opencode] model=$MODEL agent=$AGENT"
 echo "[dispatch-opencode] report=$REPORT_PATH"
 
 TIMEOUT_BIN="$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || true)"
 if [ -n "$TIMEOUT_BIN" ]; then
-  TIMEOUT_PREFIX=("$TIMEOUT_BIN" "$TIMEOUT_SEC")
+  TIMEOUT_PREFIX=("$TIMEOUT_BIN" "600")
 else
   echo "[dispatch-opencode] warn: no timeout(1)/gtimeout on PATH; running without timeout" >&2
   TIMEOUT_PREFIX=()
@@ -49,7 +45,7 @@ fi
   > "$TASK_DIR/stdout.log"
 EXIT=$?
 
-SESSION_ID=$(head -1 "$TASK_DIR/events.jsonl" 2>/dev/null | head -1 | sed 's/.*"sessionID":"\([^"]*\)".*/\1/' || echo "")
+SESSION_ID=$(head -1 "$TASK_DIR/events.jsonl" 2>/dev/null | sed 's/.*"sessionID":"\([^"]*\)".*/\1/' || echo "")
 
 cat > "$TASK_DIR/FINAL_OUTPUT.md" <<OUT
 # dispatch-opencode result

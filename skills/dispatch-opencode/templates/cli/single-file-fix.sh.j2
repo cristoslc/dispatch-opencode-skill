@@ -4,16 +4,13 @@
 # Writes .lock on start, FINAL_OUTPUT.md on completion, deletes .lock on exit.
 set -uo pipefail
 
-TASK_DIR="$(cd "$(dirname "$0")" && pwd)"
+TASK_DIR={{ task_dir | shellquote }}
 TASK_ID={{ task_id | shellquote }}
 GENERATED_AT={{ generated_at | shellquote }}
 CWD={{ cwd | shellquote }}
 MODEL={{ model | shellquote }}
 AGENT={{ agent | shellquote }}
-TIMEOUT_SEC={{ timeout_sec | shellquote }}
 TARGET_FILE={{ target_file | shellquote }}
-
-cd "$CWD"
 
 # Write lock file with PID for stall detection
 echo "PID=$$" > "$TASK_DIR/.lock"
@@ -25,7 +22,6 @@ echo "PID=$$" > "$TASK_DIR/.lock"
 if [ -n "${OPENCODE_SERVER_URL:-}" ]; then
   ATTACH_ARGS=(--attach "$OPENCODE_SERVER_URL" --password "$OPENCODE_SERVER_PASSWORD")
 else
-  # Local mode — unset password to prevent session-in-session leak (issue #24747)
   unset OPENCODE_SERVER_PASSWORD
   ATTACH_ARGS=(--dir "$CWD")
 fi
@@ -34,12 +30,12 @@ export OPENCODE_DISABLE_AUTOUPDATE=true
 
 echo "[dispatch-opencode] task_id=$TASK_ID generated=$GENERATED_AT"
 echo "[dispatch-opencode] cwd=$CWD"
-echo "[dispatch-opencode] model=$MODEL agent=$AGENT timeout=${TIMEOUT_SEC}s"
+echo "[dispatch-opencode] model=$MODEL agent=$AGENT"
 echo "[dispatch-opencode] target=$TARGET_FILE"
 
 TIMEOUT_BIN="$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || true)"
 if [ -n "$TIMEOUT_BIN" ]; then
-  TIMEOUT_PREFIX=("$TIMEOUT_BIN" "$TIMEOUT_SEC")
+  TIMEOUT_PREFIX=("$TIMEOUT_BIN" "600")
 else
   echo "[dispatch-opencode] warn: no timeout(1)/gtimeout on PATH; running without timeout" >&2
   TIMEOUT_PREFIX=()
@@ -58,10 +54,8 @@ fi
   > "$TASK_DIR/stdout.log"
 EXIT=$?
 
-# Extract session ID from events.jsonl (first step_start event)
-SESSION_ID=$(head -1 "$TASK_DIR/events.jsonl" 2>/dev/null | head -1 | sed 's/.*"sessionID":"\([^"]*\)".*/\1/' || echo "")
+SESSION_ID=$(head -1 "$TASK_DIR/events.jsonl" 2>/dev/null | sed 's/.*"sessionID":"\([^"]*\)".*/\1/' || echo "")
 
-# Write FINAL_OUTPUT.md with structured result
 cat > "$TASK_DIR/FINAL_OUTPUT.md" <<OUT
 # dispatch-opencode result
 
@@ -74,11 +68,9 @@ agent: $AGENT
 target: $TARGET_FILE
 OUT
 
-# Append assistant text from stdout.log (strip JSON events, keep text deltas)
 echo "" >> "$TASK_DIR/FINAL_OUTPUT.md"
 echo "## Output" >> "$TASK_DIR/FINAL_OUTPUT.md"
 if [ -s "$TASK_DIR/events.jsonl" ]; then
-  # Extract all text deltas from the event stream
   python3 -c "
 import json, sys
 with open('$TASK_DIR/events.jsonl') as f:

@@ -1,86 +1,112 @@
 # Examples
 
-Concrete invocations of the CLI dispatch template. The skill writes `start-subagent.sh` to `.subagents/<task-id>/` and spawns it in the background.
+Concrete invocations of the dispatch-opencode skill.
 
-## Basic single-file fix
+## Single task via run-plan.sh
 
-The async lock-watch pattern. The parent writes the dispatch artifact and polls `.lock` for completion.
+The agent writes a 1-task plan, dispatches it, and polls the lockfile.
 
 ```sh
-TASK_ID="$(date -u +%Y%m%dT%H%M%SZ)-$(echo 'fix bug in foo.py' | shasum -a 256 | cut -c1-8)"
-TASK_DIR=".subagents/$TASK_ID"
-mkdir -p "$TASK_DIR"
+# 1. Write the plan
+cat > plan.yaml <<'YAML'
+tasks:
+  - id: fix-foo
+    kind: single-file-fix
+    model: ollama-cloud/deepseek-v4-flash:cloud
+    agent: build
+    prompt: prompt-fix-foo.md
+    target: src/foo.py
+YAML
 
-# Write the prompt
-cat > "$TASK_DIR/prompt.md" <<'MD'
+# 2. Write the prompt
+cat > prompt-fix-foo.md <<'MD'
 Fix the arithmetic bug in src/foo.py. The `add` function uses subtraction
 instead of addition. Change `a - b` to `a + b`.
 MD
 
-# Write and spawn the start script
-cat > "$TASK_DIR/start-subagent.sh" <<'SH'
-#!/usr/bin/env bash
-set -uo pipefail
-TASK_DIR="$(cd "$(dirname "$0")" && pwd)"
-echo "$$" > "$TASK_DIR/.lock"
-export OPENCODE_DISABLE_AUTOCOMPACT=true
-export OPENCODE_DISABLE_AUTOUPDATE=true
-opencode run \
-  --attach "$OPENCODE_SERVER_URL" --password "$OPENCODE_SERVER_PASSWORD" \
-  --model ollama-cloud/glm-5.1 --agent build --format json \
-  --dangerously-skip-permissions --file src/foo.py \
-  < "$TASK_DIR/prompt.md" \
-  2> "$TASK_DIR/stderr.log" \
-  | tee "$TASK_DIR/events.jsonl" > "$TASK_DIR/stdout.log"
-EXIT=$?
-rm -f "$TASK_DIR/.lock"
-echo "[dispatch-opencode] exit=$EXIT"
-exit "$EXIT"
-SH
+# 3. Dispatch
+result=$(bash skills/dispatch-opencode/scripts/run-plan.sh --plan plan.yaml)
+lockfile=$(echo "$result" | python3 -c "import json,sys; print(json.load(sys.stdin)['tasks'][0]['lockfile'])")
+task_dir=$(echo "$result" | python3 -c "import json,sys; print(json.load(sys.stdin)['tasks'][0]['task_dir'])")
 
-chmod +x "$TASK_DIR/start-subagent.sh"
-bash "$TASK_DIR/start-subagent.sh" &
-PID=$!
-echo "spawned subagent pid=$PID task_dir=$TASK_DIR"
+# 4. Poll the lockfile (~15s interval)
+while [ -f "$lockfile" ]; do sleep 15; done
 
-# Poll for completion
-while [ -f "$TASK_DIR/.lock" ]; do
-  AGE=$(( $(date +%s) - $(stat -f %m "$TASK_DIR/.lock") ))
-  if [ "$AGE" -gt 600 ]; then
-    echo "stall detected — killing pid=$PID"
-    kill "$PID" 2>/dev/null || true
-    break
-  fi
-  sleep 2
-done
+# 5. Read result
+cat "$task_dir/FINAL_OUTPUT.md"
 
-# Read result
-cat "$TASK_DIR/FINAL_OUTPUT.md" 2>/dev/null || echo "no FINAL_OUTPUT.md"
+# 6. Merge work and clean up
+# (agent's choice: merge, PR, squash, etc.)
+bash skills/dispatch-opencode/scripts/subagent-cleanup.sh --task-id fix-foo --root "$(git rev-parse --show-toplevel)"
 ```
 
-## Parallel fan-out (N subagents)
-
-Spawn N subagents, each with its own `.lock`. Poll all `.lock` files in a loop:
+## Parallelize N tasks via run-plan.sh
 
 ```sh
-for task in "${TASK_DIRS[@]}"; do
-  bash "$task/start-subagent.sh" &
+cat > plan.yaml <<'YAML'
+tasks:
+  - id: fix-auth
+    kind: single-file-fix
+    model: ollama-cloud/glm-5.1
+    agent: build
+    prompt: prompts/fix-auth.md
+    target: src/auth.py
+    worktree: fix-auth-branch
+  - id: fix-logging
+    kind: single-file-fix
+    model: ollama-cloud/deepseek-v4-flash:cloud
+    agent: build
+    prompt: prompts/fix-logging.md
+    target: src/logging.py
+    worktree: fix-logging-branch
+YAML
+
+result=$(bash skills/dispatch-opencode/scripts/run-plan.sh --plan plan.yaml)
+
+# Poll all lockfiles
+lockfiles=$(echo "$result" | python3 -c "
+import json, sys
+for t in json.load(sys.stdin)['tasks']:
+    if t['status'] == 'dispatched':
+        print(t['lockfile'])
+")
+
+while true; do
+  remaining=0
+  while read -r lf; do
+    [ -f "$lf" ] && remaining=$((remaining + 1))
+  done <<< "$lockfiles"
+  [ "$remaining" -eq 0 ] && break
+  sleep 15
 done
 
-# Poll all until done or timeout
-while true; do
-  remaining=()
-  for task in "${TASK_DIRS[@]}"; do
-    [ -f "$task/.lock" ] && remaining+=("$task")
-  done
-  [ "${#remaining[@]}" -eq 0 ] && break
-  sleep 2
-done
+# Read results, merge, clean up each task
+# ...
+bash skills/dispatch-opencode/scripts/subagent-cleanup.sh --task-id fix-auth --root "$(git rev-parse --show-toplevel)"
+bash skills/dispatch-opencode/scripts/subagent-cleanup.sh --task-id fix-logging --root "$(git rev-parse --show-toplevel)"
+```
+
+## Abandon a failed task
+
+```sh
+bash skills/dispatch-opencode/scripts/subagent-abandon.sh --task-id fix-auth --root "$(git rev-parse --show-toplevel)"
+# Kills PID, force-removes worktree, deletes branch, removes task dir.
+```
+
+## Stale resource recovery
+
+```sh
+# Report only
+bash skills/dispatch-opencode/scripts/cleanup-stale.sh /path/to/repo
+
+# Report and clean up
+bash skills/dispatch-opencode/scripts/cleanup-stale.sh --abandon /path/to/repo
 ```
 
 ## Attaching to a subagent
 
-Since the subagent uses `--attach` to the serve daemon, the operator can attach from another terminal:
+Since the subagent uses `--attach` to the serve daemon, the operator can
+attach from another terminal:
 
 ```sh
 opencode attach http://localhost:4096 --session <session-id>
