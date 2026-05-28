@@ -17,7 +17,7 @@ ok()  { printf 'test: PASS %s\n' "$*"; }
 # Define test values for each parameter
 TEST_KIND="headless-spike"
 TEST_CWD=""
-TEST_MODEL="ollama-cloud/deepseek-v4-flash:cloud"
+TEST_MODEL="ollama-cloud/gemma4:31b-cloud"
 TEST_AGENT="explore"
 TEST_PROMPT="Check your environment and report: what is your CWD, what model are you using, what agent, and what file was passed to --file? Write this to reports/param-report.md"
 TEST_TARGET="reports/param-report.md"
