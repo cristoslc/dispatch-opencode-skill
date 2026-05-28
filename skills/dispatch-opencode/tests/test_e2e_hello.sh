@@ -29,6 +29,12 @@ cat > prompt.md <<'MD'
 Say "hello world" exactly. Nothing else.
 MD
 
+cat > README.md <<'MD'
+# Hello World
+
+This is a placeholder README.
+MD
+
 git add -A && git commit -q -m fixture
 
 echo "test: dispatching hello-world..."
