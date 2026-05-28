@@ -1,103 +1,86 @@
 # dispatch-opencode
 
-A skill that lets agentic CLIs — Claude Code, Codex, Gemini, and others — dispatch subagent tasks through [opencode](https://opencode.ai) instead of their built-in subagent runtimes.
+A skill that lets agentic CLIs — Claude Code, Codex, and others —
+dispatch subagent tasks through [opencode](https://opencode.ai) using
+an async `.subagents/` lock-watch protocol.
 
 ## Why
 
-Built-in subagent systems are tied to a single model provider and execution surface. Routing through opencode unlocks:
+Built-in subagent systems run one task at a time or are locked to a
+single host runtime. Routing through opencode unlocks:
 
-- **Broader model choice.** Dispatch tasks to any model opencode supports — open-weight (Ollama Cloud, OpenRouter) or proprietary — mixing providers per subagent.
-- **Live attach.** Each subagent runs in an opencode session you can attach to from another terminal, observe, and steer mid-flight.
-- **Auditable artifacts.** Every dispatch writes its prompt, parts, and event stream to `.dispatch-opencode/<task-id>/` for replay or audit.
-- **Per-kind permission gating.** The skill's allowlist auto-approves safe tool calls (read, search, file-scoped edits) and rejects everything else — no `--dangerously-skip-permissions`.
+- **Broader model choice.** Dispatch tasks to any model opencode
+  supports — mixing providers per subagent.
+- **1-to-N parallelize.** Run N independent tasks with per-task
+  worktree isolation.
+- **Live attach.** Each subagent runs in an opencode session you can
+  attach to from another terminal.
+- **Auditable artifacts.** Every dispatch writes its prompt, event
+  stream, and output to `.subagents/<task-id>/` for replay or audit.
+- **Host-agnostic.** The dispatch target is always `opencode run`. No
+  per-host adapter needed.
 
 ## How it works
 
-The skill drives opencode over **ACP (Agent Client Protocol)** on a fixed HTTP port. The host CLI (or its skill adapter) invokes `bin/dispatch-opencode` with a kind, a target, and a prompt file. The binary:
+The orchestrator (AI agent) writes a plan YAML, calls `run-plan.sh`,
+and parses the structured JSON output. The script validates the plan,
+prepares worktrees, dispatches each task, and returns lockfile paths
+and PIDs. The orchestrator polls lockfiles on its own interval — when
+a lockfile disappears, the subagent is done.
 
-1. Verifies the working directory and branch.
-2. Allocates a task directory under `.dispatch-opencode/<task-id>/`.
-3. Renders the prompt from a per-kind Jinja2 template.
-4. Spawns `opencode acp --port <fixed-port>`, initializes a session, and sends the prompt.
-5. Relays permission asks through a per-kind allowlist (rejects by default).
-6. Prints the attach URL so you can `opencode attach <url> --session <id>` from another terminal.
+```
+Agent ──► run-plan.sh ──► dispatch.sh ──► opencode run
+  ▲                                       (background)
+  │                                            │
+  └──── poll .lock ──── .subagents/<id>/ ◄─────┘
+```
 
-Alternate modes (`--mode cli`, `--mode http`) are available when ACP doesn't fit.
+## Quick example
 
-## Dispatch kinds
+```sh
+# Write a plan
+cat > plan.yaml <<'YAML'
+tasks:
+  - id: fix-auth
+    kind: single-file-fix
+    model: ollama-cloud/glm-5.1
+    agent: build
+    prompt: prompts/fix-auth.md
+    target: src/auth.py
+    worktree: fix-auth-branch
+YAML
 
-| Kind | Use for | Key flags |
-|------|---------|-----------|
-| `single-file-fix` | One agent edits one file from a focused prompt | `--target-file`, `--prompt-file` |
-| `parallel-review-fanout` | N agents, N files, shared decisions doc | `--target-files`, `--shared-decisions`, `--prompt-file` |
-| `headless-spike` | Read-only investigation, agent writes a report file | `--report-path`, `--prompt-file` |
+# Dispatch
+result=$(bash skills/dispatch-opencode/scripts/run-plan.sh --plan plan.yaml)
 
-Each kind has its own permission allowlist. `single-file-fix` only allows edits to `--target-file`. `headless-spike` allows read-only bash commands and edits only to `--report-path`. Everything else is denied.
+# Poll lockfile, read FINAL_OUTPUT.md, then clean up
+bash skills/dispatch-opencode/scripts/subagent-cleanup.sh --task-id fix-auth --root "$(git rev-parse --show-toplevel)"
+```
 
 ## Install
 
-1. Copy (or symlink) `skills/dispatch-opencode/` into your project's skill directory:
+1. Copy (or symlink) `skills/dispatch-opencode/` into your project's
+   skill directory:
    - Claude Code: `.claude/skills/dispatch-opencode/`
    - Codex: `.agents/skills/dispatch-opencode/`
-   - Gemini: `.agents/skills/dispatch-opencode/`
-2. Copy the runtime adapter for your host:
-   - Claude Code: `templates/runtimes/claude-code/oc-dispatch.md` → `.claude/commands/oc-dispatch.md`
-   - Codex: `agents/openai.yaml` is auto-discovered from `.agents/skills/`
-   - Gemini: `templates/runtimes/gemini/oc-dispatch.toml` → `.gemini/commands/oc-dispatch.toml`
-3. Ensure [opencode](https://opencode.ai), git, Python 3.11+, and [uv](https://docs.astral.sh/uv/) are on PATH.
+2. Ensure [opencode](https://opencode.ai), git, python3, and PyYAML
+   are on PATH.
 
-## Quick examples
+No build step. No per-host adapter. No configuration file.
 
-```sh
-# single-file-fix via ACP
-dispatch-opencode \
-  --kind single-file-fix --mode acp \
-  --cwd "$(git rev-parse --show-toplevel)" \
-  --branch "$(git branch --show-current)" \
-  --target-file src/calc.py \
-  --prompt-file prompt.md
+## Dispatch kinds
 
-# headless-spike
-dispatch-opencode \
-  --kind headless-spike --mode acp \
-  --cwd "$(git rev-parse --show-toplevel)" \
-  --branch "$(git branch --show-current)" \
-  --report-path reports/spike.md \
-  --prompt-file prompt.md
-```
-
-## Runtime adapters
-
-| Host | Status | Adapter |
-|------|--------|---------|
-| Claude Code | tested | `.claude/commands/oc-dispatch.md` |
-| Codex CLI | untested | `agents/openai.yaml` + direct invocation |
-| Gemini CLI | untested | `.gemini/commands/oc-dispatch.toml` |
-| Cursor | untested | `.cursor/rules/` snippet |
-
-See `skills/dispatch-opencode/references/runtimes.md` and `skills/dispatch-opencode/templates/runtimes/` for details.
-
-## Configuration
-
-Defaults live in `.dispatch-opencode/config.yaml` at the repo root:
-
-```yaml
-mode: acp
-acp:
-  port: 4096
-  hostname: "127.0.0.1"
-default_model: ollama-cloud/glm-5.1
-default_agent: build
-default_timeout_sec: 600
-worktree_root: .worktrees
-templates_dir: skills/dispatch-opencode/templates   # adjust if installed elsewhere
-```
+| Kind | Use for |
+|------|---------|
+| `single-file-fix` | One agent edits one file from a focused prompt |
+| `headless-spike` | Read-only investigation, agent writes a report file |
 
 ## Documentation
 
-- `skills/dispatch-opencode/SKILL.md` — full design contract, dispatch flow, permission model
-- `skills/dispatch-opencode/references/examples.md` — invocation examples per kind and mode
-- `skills/dispatch-opencode/references/runtimes.md` — per-host adapter status and wiring
+- `skills/dispatch-opencode/SKILL.md` — full design contract, dispatch
+  flow, permission model
+- `skills/dispatch-opencode/references/examples.md` — invocation
+  examples per workflow
 
 ## License
 

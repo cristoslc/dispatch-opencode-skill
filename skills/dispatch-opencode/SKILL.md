@@ -15,7 +15,7 @@ compatibility: Requires opencode CLI (https://opencode.ai), git, and a running
   `opencode serve` daemon for --attach mode (optional, falls back to local).
 metadata:
   version: "2.0.0"
-  status: draft
+  status: active
   author: cristoslc
 ---
 
@@ -97,11 +97,6 @@ Call `cleanup-stale.sh [--abandon]` after a crash or long idle period.
 
 - Without `--abandon`: reports stale locks and orphaned worktrees.
 - With `--abandon`: calls `subagent-abandon.sh` for each.
-
-### Workflow 4: Result aggregation
-
-Call `collect-results.sh` for a combined summary. Optional — the agent
-can read each `FINAL_OUTPUT.md` directly.
 
 ## Script inventory
 
