@@ -12,6 +12,7 @@ dispatch kind:
 | File | Kind | Use |
 |------|------|-----|
 | `single-file-fix.sh.j2` | `single-file-fix` | Focused edit on one target file. |
+| `headless-spike.sh.j2` | `headless-spike` | Read-only investigation, writes report file. |
 
 ## `runtimes/`
 

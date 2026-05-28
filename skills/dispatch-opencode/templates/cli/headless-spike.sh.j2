@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Rendered dispatch script — single-file-fix
+# Rendered dispatch script — headless-spike
 #
-# Writes .lock on start, FINAL_OUTPUT.md on completion, deletes .lock on exit.
+# Read-only investigation. Writes .lock on start, FINAL_OUTPUT.md on completion,
+# deletes .lock on exit. --agent defaults to explore (opencode's read-only agent).
 set -uo pipefail
 
 TASK_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -11,31 +12,21 @@ CWD={{ cwd | shellquote }}
 MODEL={{ model | shellquote }}
 AGENT={{ agent | shellquote }}
 TIMEOUT_SEC={{ timeout_sec | shellquote }}
-TARGET_FILE={{ target_file | shellquote }}
+REPORT_PATH={{ report_path | shellquote }}
 
 cd "$CWD"
 
-# Write lock file with PID for stall detection
 echo "PID=$$" > "$TASK_DIR/.lock"
 
-# When a central server URL is available, use --attach (SPIKE-001). The
-# child is an HTTP client, never spawning its own in-process server —
-# avoids the session-in-session env-var leak (issue #24747). When no server
-# is available (e.g., Claude Code as parent), fall back to local --dir mode.
-if [ -n "${OPENCODE_SERVER_URL:-}" ]; then
-  ATTACH_ARGS=(--attach "$OPENCODE_SERVER_URL" --password "$OPENCODE_SERVER_PASSWORD")
-else
-  # Local mode — unset password to prevent session-in-session leak (issue #24747)
-  unset OPENCODE_SERVER_PASSWORD
-  ATTACH_ARGS=(--dir "$CWD")
-fi
 export OPENCODE_DISABLE_AUTOCOMPACT=true
 export OPENCODE_DISABLE_AUTOUPDATE=true
+# Unset to prevent session-in-session leak when running inside opencode
+unset OPENCODE_SERVER_PASSWORD
 
 echo "[dispatch-opencode] task_id=$TASK_ID generated=$GENERATED_AT"
 echo "[dispatch-opencode] cwd=$CWD"
 echo "[dispatch-opencode] model=$MODEL agent=$AGENT timeout=${TIMEOUT_SEC}s"
-echo "[dispatch-opencode] target=$TARGET_FILE"
+echo "[dispatch-opencode] report=$REPORT_PATH"
 
 TIMEOUT_BIN="$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || true)"
 if [ -n "$TIMEOUT_BIN" ]; then
@@ -46,22 +37,20 @@ else
 fi
 
 "${TIMEOUT_PREFIX[@]+"${TIMEOUT_PREFIX[@]}"}" opencode run \
-  "${ATTACH_ARGS[@]}" \
+  --dir "$CWD" \
   --model "$MODEL" \
   --agent "$AGENT" \
   --format json \
   --dangerously-skip-permissions \
-  --file "$TARGET_FILE" \
+  --file "$REPORT_PATH" \
   < "$TASK_DIR/prompt.md" \
   2> "$TASK_DIR/stderr.log" \
   | tee "$TASK_DIR/events.jsonl" \
   > "$TASK_DIR/stdout.log"
 EXIT=$?
 
-# Extract session ID from events.jsonl (first step_start event)
 SESSION_ID=$(head -1 "$TASK_DIR/events.jsonl" 2>/dev/null | head -1 | sed 's/.*"sessionID":"\([^"]*\)".*/\1/' || echo "")
 
-# Write FINAL_OUTPUT.md with structured result
 cat > "$TASK_DIR/FINAL_OUTPUT.md" <<OUT
 # dispatch-opencode result
 
@@ -71,15 +60,12 @@ exit_code: $EXIT
 session_id: ${SESSION_ID:-unknown}
 model: $MODEL
 agent: $AGENT
-target: $TARGET_FILE
+report: $REPORT_PATH
 OUT
 
-# Append assistant text from stdout.log (strip JSON events, keep text deltas)
 echo "" >> "$TASK_DIR/FINAL_OUTPUT.md"
 echo "## Output" >> "$TASK_DIR/FINAL_OUTPUT.md"
-if [ -s "$TASK_DIR/events.jsonl" ]; then
-  # Extract all text deltas from the event stream
-  python3 -c "
+python3 -c "
 import json, sys
 with open('$TASK_DIR/events.jsonl') as f:
     for line in f:
@@ -89,7 +75,6 @@ with open('$TASK_DIR/events.jsonl') as f:
                 print(ev['part']['text'])
         except: pass
 " 2>/dev/null >> "$TASK_DIR/FINAL_OUTPUT.md" || true
-fi
 
 rm -f "$TASK_DIR/.lock"
 echo "[dispatch-opencode] exit=$EXIT"

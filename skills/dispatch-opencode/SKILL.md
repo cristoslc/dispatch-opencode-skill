@@ -75,16 +75,27 @@ For previous versions of this skill (ACP/CLI/HTTP), see ADR-001.
 
 ## Dispatch flow
 
+The preferred entry point is `scripts/dispatch.sh`, which automates the entire flow.
+The manual flow (for custom orchestration):
+
 1. **Parse intent** — kind, model, agent, target file, prompt body, CWD.
 2. **Verify CWD** — `scripts/verify-cwd.sh <path> [--branch <name>] [--worktree <label> --worktree-root <absolute-root>]`.
 3. **Allocate task ID** — `<UTC-timestamp>-<short-hash-of-prompt>`. Create `.subagents/<task-id>/`.
 4. **Copy prompt** — write prompt text to `.subagents/<task-id>/prompt.md`.
 5. **Render start script** — render `templates/cli/<kind>.sh.j2` to `.subagents/<task-id>/start-subagent.sh` with model, agent, target file, and timeout.
-6. **Detect server URL** — check `OPENCODE_SERVER_URL`. If set, the template uses `--attach` so the subagent is visible on the serve daemon. If unset, the template uses local `--dir` mode (safe fallback, no env-var leak).
+6. **Detect server URL** — check `OPENCODE_SERVER_URL`. If set, the template uses `--attach` so the subagent is visible on the serve daemon. If unset, the template unsets `OPENCODE_SERVER_PASSWORD` and uses local `--dir` mode (safe fallback).
 7. **Spawn** — `bash .subagents/<task-id>/start-subagent.sh &`. Capture PID.
-8. **Poll loop** — `while [ -f .subagents/<task-id>/.lock ]; do sleep 2; done`. The `.lock` file contains the PID — the parent checks mtime every iteration for stall detection.
-9. **Stall detection** — if `.lock` mtime exceeds `--timeout`, kill the process and mark the task as stalled.
-10. **Read result** — read `FINAL_OUTPUT.md` for the structured result. If absent or empty, check `events.jsonl` for the last event (error or stop reason).
+8. **Wait for .lock** — the subagent writes `.lock` on start. Wait up to 7.5s for it to appear (handles spawn-to-lock race).
+9. **Poll loop** — `while [ -f .subagents/<task-id>/.lock ]; do sleep 2; done`. The `.lock` file contains the PID — the parent checks mtime every iteration for stall detection.
+10. **Stall detection** — if `.lock` mtime exceeds `--timeout`, kill the process and mark the task as stalled.
+11. **Read result** — read `FINAL_OUTPUT.md` for the structured result (exit code, session ID, assistant text). If absent or empty, check `events.jsonl` for the last event (error or stop reason).
+
+### dispatch.sh
+
+`scripts/dispatch.sh <kind> <cwd> <model> <agent> <prompt-file> <target-or-report> [--timeout <sec>]`
+
+Handles template rendering, spawning, lock polling, and result reading automatically.
+Exit codes: 0 (success), 124 (timeout/stall), 1 (error).
 
 The parent never reads `stdout.log` unless `FINAL_OUTPUT.md` indicates a
 problem. `events.jsonl` is always written for post-mortem debugging.
