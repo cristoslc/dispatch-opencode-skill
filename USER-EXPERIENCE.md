@@ -34,6 +34,10 @@ box. No per-host adapter needed — the dispatch target is always
 `run-plan.sh --plan plan.yaml`. It validates, dispatches, and returns
 structured JSON. The orchestrator polls lockfiles on its own interval.
 
+**Poll.** After dispatch, call `poll-subagent.sh --task-id <id> --root
+<path>` to monitor a subagent. It logs event line count each
+iteration, detects stuck tasks (exit 2), and times out (exit 3).
+
 **Cleanup.** After reading `FINAL_OUTPUT.md` and merging work, call
 `subagent-cleanup.sh` to remove task artifacts and worktree.
 
@@ -50,6 +54,8 @@ serve daemon. Attach from another terminal with
 |-----------|--------|
 | Dispatch latency | Under 2 seconds from invocation to `.lock` appearance |
 | Poll interval | Orchestrator's choice (recommended ~15s) |
+| Max poll duration | 180s (simple) / 240s (complex) — abandon if exceeded |
+| Stuck detection | `events.jsonl` line count + mtime; >60s stale = stuck |
 | Parallelize overhead | Linear — N tasks start in spawn + lock-appearance time |
 | Audit completeness | Every dispatch produces prompt, events, and output on disk |
 | Crash recovery | Stale locks and orphaned worktrees cleaned by `cleanup-stale.sh` |

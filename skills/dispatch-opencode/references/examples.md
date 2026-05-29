@@ -29,8 +29,13 @@ result=$(bash skills/dispatch-opencode/scripts/run-plan.sh --plan plan.yaml)
 lockfile=$(echo "$result" | python3 -c "import json,sys; print(json.load(sys.stdin)['tasks'][0]['lockfile'])")
 task_dir=$(echo "$result" | python3 -c "import json,sys; print(json.load(sys.stdin)['tasks'][0]['task_dir'])")
 
-# 4. Poll the lockfile (~15s interval)
-while [ -f "$lockfile" ]; do sleep 15; done
+# 4. Poll for completion (recommended: use poll-subagent.sh)
+#    Exit 0 = completed, 2 = stuck, 3 = timeout
+bash skills/dispatch-opencode/scripts/poll-subagent.sh \
+  --task-id fix-foo --root "$(git rev-parse --show-toplevel)" \
+  --max-polls 12 --stale-threshold 60
+# Or, for complex tasks:
+#   --max-polls 16
 
 # 5. Read result
 cat "$task_dir/FINAL_OUTPUT.md"
@@ -63,22 +68,21 @@ YAML
 
 result=$(bash skills/dispatch-opencode/scripts/run-plan.sh --plan plan.yaml)
 
-# Poll all lockfiles
-lockfiles=$(echo "$result" | python3 -c "
+# Poll each task (recommended: use poll-subagent.sh per task)
+# Exit codes: 0 = completed, 2 = stuck, 3 = timeout
+tasks=$(echo "$result" | python3 -c "
 import json, sys
 for t in json.load(sys.stdin)['tasks']:
     if t['status'] == 'dispatched':
-        print(t['lockfile'])
+        print(t['id'])
 ")
 
-while true; do
-  remaining=0
-  while read -r lf; do
-    [ -f "$lf" ] && remaining=$((remaining + 1))
-  done <<< "$lockfiles"
-  [ "$remaining" -eq 0 ] && break
-  sleep 15
+for tid in $tasks; do
+  bash skills/dispatch-opencode/scripts/poll-subagent.sh \
+    --task-id "$tid" --root "$(git rev-parse --show-toplevel)" \
+    --max-polls 12 --stale-threshold 60 &
 done
+wait
 
 # Read results, merge, clean up each task
 # ...

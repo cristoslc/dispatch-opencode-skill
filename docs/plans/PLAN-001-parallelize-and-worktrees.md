@@ -52,8 +52,9 @@ subagent-cleanup.sh or subagent-abandon.sh.
 
 **Workflow 2: Parallelize N tasks.** Agent writes an N-task plan, calls
 run-plan.sh, gets back N lockfile paths, polls them on a 15-second
-interval, reads each FINAL_OUTPUT.md as tasks complete, calls cleanup or
-abandon per task.
+interval (max 180s simple / 240s complex), logs each task's
+`events.jsonl` line count to confirm progression, reads each
+FINAL_OUTPUT.md as tasks complete, calls cleanup or abandon per task.
 
 **Workflow 3: Stale resource recovery.** Agent (or a scheduled job) calls
 cleanup-stale.sh after a crash or long idle period. Finds orphaned
@@ -80,8 +81,11 @@ The script returns structured output (JSON) to stdout with lockfile
 paths, PIDs, task dirs, and per-task status (dispatched or skipped).
 The script exits immediately — it does not poll or wait.
 
-**3. Monitor.** Agent polls lockfiles on its own interval (~15s). Two
-checks per lockfile:
+**3. Monitor.** Agent polls lockfiles on its own interval (~15s), up to
+a maximum of 180s for simple tasks or 240s for complex tasks. Each poll
+iteration: log `events.jsonl` line count and mtime per task to confirm
+progression. If line count stalls and mtime is >60s stale, the subagent
+may be stuck — abandon it. Two checks per lockfile:
 - Lockfile gone → task completed. Read FINAL_OUTPUT.md.
 - PID from lockfile is dead → task stalled. Decide to abandon.
 

@@ -77,6 +77,8 @@ for t in tasks:
     if not os.path.isabs(prompt):
         prompt = os.path.join('$PLAN_DIR', prompt)
 
+    agent = agent if agent else '-'
+    worktree = worktree if worktree else '-'
     print(f'{tid}\t{kind}\t{model}\t{agent}\t{prompt}\t{target}\t{worktree}')
 " 2>/dev/null) || err "plan parsing failed — check YAML syntax and required fields (id, kind, model, prompt)"
 
@@ -110,7 +112,7 @@ while IFS=$'\t' read -r TID TKIND TMODEL TAGENT TPROMPT TTARGET TWORKTREE; do
     --target "$TTARGET"
     --task-id "$TID"
   )
-  [ -n "$TWORKTREE" ] && DISPATCH_ARGS+=(--worktree "$TWORKTREE")
+  [ -n "$TWORKTREE" ] && [ "$TWORKTREE" != "-" ] && DISPATCH_ARGS+=(--worktree "$TWORKTREE")
 
   # Call dispatch.sh — captures JSON output on stdout
   DISPATCH_OUT=$("$DISPATCH" "${DISPATCH_ARGS[@]}" 2>"$PLAN_DIR_OUT/$TID-dispatch-stderr.log") || {

@@ -75,10 +75,12 @@ For previous versions of this skill (ACP/CLI/HTTP), see ADR-001.
 1. Write a 1-task plan YAML.
 2. Call `run-plan.sh --plan plan.yaml`.
 3. Parse JSON output for lockfile path and PID.
-4. Poll lockfile on agent's interval (~15s).
-5. On completion: read `FINAL_OUTPUT.md`, merge work, call
+4. Call `poll-subagent.sh --task-id <id> --root <path>`. It logs
+   event line count each iteration, detects stuck tasks (exit 2),
+   and times out (exit 3). Or poll manually with the same checks.
+5. On completion (exit 0): read `FINAL_OUTPUT.md`, merge work, call
    `subagent-cleanup.sh`.
-6. On failure: call `subagent-abandon.sh`.
+6. On failure or stuck (exit 2/3): call `subagent-abandon.sh`.
 
 ### Workflow 2: Parallelize N tasks
 
@@ -86,10 +88,12 @@ For previous versions of this skill (ACP/CLI/HTTP), see ADR-001.
    satisfied).
 2. Call `run-plan.sh --plan plan.yaml`.
 3. Parse JSON output for N lockfile paths and PIDs.
-4. Poll all lockfiles on agent's interval.
+4. For each dispatched task, call `poll-subagent.sh --task-id <id>
+   --root <path>`. It logs event line count per iteration, detects
+   stuck tasks, and times out. Or poll manually with the same checks.
 5. Per completed task: read `FINAL_OUTPUT.md`, merge work, call
    `subagent-cleanup.sh`.
-6. Per failed task: call `subagent-abandon.sh`.
+6. Per failed or stuck task: call `subagent-abandon.sh`.
 
 ### Workflow 3: Stale resource recovery
 
@@ -103,6 +107,7 @@ Call `cleanup-stale.sh [--abandon]` after a crash or long idle period.
 | Script | Agent-facing | Purpose |
 |--------|-------------|---------|
 | `run-plan.sh` | yes | Validate plan, prepare worktrees, dispatch, return lockfile list as JSON |
+| `poll-subagent.sh` | yes | Poll subagent lockfile until completion, stuck, or timeout |
 | `subagent-cleanup.sh` | yes | Remove completed task's artifacts + worktree |
 | `subagent-abandon.sh` | yes | Kill PID, force-remove failed task + worktree |
 | `cleanup-stale.sh` | yes | Scan for stale locks and orphaned worktrees |
@@ -175,6 +180,24 @@ run-plan.sh returns JSON on stdout (all other output goes to stderr):
 `.subagents/` is gitignored. The real worktree lives inside the task
 directory so its lifecycle is bound to the task. The symlink in
 `.worktrees/` lets other tooling discover active worktrees.
+
+## poll-subagent.sh
+
+```
+poll-subagent.sh --task-id <id> --root <project-root> \
+  [--interval <sec>] [--max-polls <n>] [--stale-threshold <sec>]
+```
+
+Monitors a dispatched subagent by polling its lockfile and `events.jsonl`.
+Each iteration logs the event line count and mtime. Exits with:
+
+- **0** — task completed (lockfile gone)
+- **2** — stuck (events line count unchanged and mtime stale past threshold)
+- **3** — timeout (max polls reached, lockfile still present)
+- **1** — error (bad args, missing task dir)
+
+Defaults: `--interval 15`, `--max-polls 12` (up to 180s),
+`--stale-threshold 60`. Use `--max-polls 16` for complex tasks (up to 240s).
 
 ## subagent-cleanup.sh
 
