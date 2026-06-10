@@ -32,18 +32,20 @@ echo "[dispatch-opencode] model=$MODEL agent=$AGENT"
 echo "[dispatch-opencode] branch=$BRANCH pr_title=$PR_TITLE"
 
 # Push branch to remote (ensure it exists for PR creation)
-git push origin "HEAD:$BRANCH" 2>&1 || echo "[dispatch-opencode] warn: git push failed (branch may already exist upstream)"
-
-# Create draft PR with the prompt as the body
 PR_URL=""
-if command -v gh &>/dev/null; then
-  PR_URL=$(gh pr create --draft --title "$PR_TITLE" --body-file "$TASK_DIR/prompt.md" 2>/dev/null) || {
-    echo "[dispatch-opencode] warn: gh pr create failed (continue without PR)" >&2
-    PR_URL=""
-  }
-  echo "[dispatch-opencode] pr_url=$PR_URL"
+if git push origin "HEAD:$BRANCH" 2>"$TASK_DIR/git-push-errors.log"; then
+  # Create draft PR with the prompt as the body
+  if command -v gh &>/dev/null; then
+    PR_URL=$(gh pr create --draft --title "$PR_TITLE" --body-file "$TASK_DIR/prompt.md" 2>/dev/null) || {
+      echo "[dispatch-opencode] warn: gh pr create failed (continue without PR)" >&2
+      PR_URL=""
+    }
+    echo "[dispatch-opencode] pr_url=$PR_URL"
+  else
+    echo "[dispatch-opencode] warn: gh not on PATH; skipping PR creation" >&2
+  fi
 else
-  echo "[dispatch-opencode] warn: gh not on PATH; skipping PR creation" >&2
+  echo "[dispatch-opencode] warn: git push failed (branch may already exist upstream); skipping PR creation" >&2
 fi
 export PR_URL
 
@@ -67,7 +69,7 @@ fi
   > "$TASK_DIR/stdout.log"
 EXIT=$?
 
-SESSION_ID=$(head -1 "$TASK_DIR/events.jsonl" 2>/dev/null | sed 's/.*"sessionID":"\([^"]*\)".*/\1/' || echo "")
+SESSION_ID=$(python3 -c "import json,sys; print(json.load(sys.stdin).get('sessionID',''))" < "$TASK_DIR/events.jsonl" 2>/dev/null || echo "")
 
 cat > "$TASK_DIR/FINAL_OUTPUT.md" <<OUT
 # dispatch-opencode result

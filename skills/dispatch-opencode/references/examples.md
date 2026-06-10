@@ -166,6 +166,7 @@ bash skills/dispatch-opencode/scripts/subagent-cleanup.sh \
   --task-id implement-feature --root "$(git rev-parse --show-toplevel)"
 
 # 7. Operator reviews the PR with full chronicle in comments/commits
-# Optional: mark PR ready for review
-gh pr ready implement-feature
+# Optional: mark PR ready for review (resolve PR number from branch)
+pr_number=$(gh pr list --head feat-123-branch --json number --jq '.[0].number')
+gh pr ready "$pr_number"
 ```
