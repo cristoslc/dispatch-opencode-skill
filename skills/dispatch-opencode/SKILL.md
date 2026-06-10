@@ -126,6 +126,14 @@ tasks:
     prompt: prompts/fix-auth.md
     target: src/auth.py
     worktree: fix-auth-branch     # optional. Branch name for worktree creation.
+
+  - id: implement-feature
+    kind: pr-work
+    model: ollama-cloud/deepseek-v4-flash:cloud
+    agent: build
+    prompt: prompts/feature-plan.md
+    worktree: feat-123-branch     # required for pr-work
+    pr_title: "Feat: implement feature X"  # optional for pr-work, defaults to task id
 ```
 
 Fields: `id` (required), `kind` (required), `model` (required),
@@ -245,6 +253,7 @@ enforced by:
 |------|--------|---------|
 | `single-file-fix` | **available** | One agent edits one file from a focused prompt. Required: `target`. |
 | `headless-spike` | **available** | Read-only investigation; agent writes a report file but does not edit source. Required: `target` (report path). Defaults to `--agent explore` (opencode's read-only built-in). |
+| `pr-work` | **available** | Creates a draft PR from the branch+worktree, then dispatches an agent to work in the worktree using the PR as chronicle. Required: `worktree`, `prompt`. Optional: `pr_title`. The subagent can push commits and add PR comments throughout its work. The PR and remote branch survive cleanup. |
 
 Add a kind by:
 

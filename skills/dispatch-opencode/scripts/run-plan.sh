@@ -59,6 +59,7 @@ for t in tasks:
     prompt = t.get('prompt', '')
     target = t.get('target', '')
     worktree = t.get('worktree', '')
+    pr_title = t.get('pr_title', '')
 
     if not tid:
         print('task missing id', file=sys.stderr)
@@ -79,7 +80,8 @@ for t in tasks:
 
     agent = agent if agent else '-'
     worktree = worktree if worktree else '-'
-    print(f'{tid}\t{kind}\t{model}\t{agent}\t{prompt}\t{target}\t{worktree}')
+    pr_title = pr_title if pr_title else '-'
+    print(f'{tid}\t{kind}\t{model}\t{agent}\t{prompt}\t{target}\t{worktree}\t{pr_title}')
 " 2>/dev/null) || err "plan parsing failed — check YAML syntax and required fields (id, kind, model, prompt)"
 
 # Allocate plan directory for tracking
@@ -97,7 +99,7 @@ FIRST=1
 DISPATCHED=0
 SKIPPED=0
 
-while IFS=$'\t' read -r TID TKIND TMODEL TAGENT TPROMPT TTARGET TWORKTREE; do
+while IFS=$'\t' read -r TID TKIND TMODEL TAGENT TPROMPT TTARGET TWORKTREE TPR_TITLE; do
   # Resolve root: use plan dir as project root
   ROOT="$PLAN_DIR"
 
@@ -113,6 +115,7 @@ while IFS=$'\t' read -r TID TKIND TMODEL TAGENT TPROMPT TTARGET TWORKTREE; do
     --task-id "$TID"
   )
   [ -n "$TWORKTREE" ] && [ "$TWORKTREE" != "-" ] && DISPATCH_ARGS+=(--worktree "$TWORKTREE")
+  [ -n "$TPR_TITLE" ] && [ "$TPR_TITLE" != "-" ] && DISPATCH_ARGS+=(--pr-title "$TPR_TITLE")
 
   # Call dispatch.sh — captures JSON output on stdout
   DISPATCH_OUT=$("$DISPATCH" "${DISPATCH_ARGS[@]}" 2>"$PLAN_DIR_OUT/$TID-dispatch-stderr.log") || {

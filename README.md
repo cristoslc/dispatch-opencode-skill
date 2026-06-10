@@ -74,6 +74,7 @@ No build step. No per-host adapter. No configuration file.
 |------|---------|
 | `single-file-fix` | One agent edits one file from a focused prompt |
 | `headless-spike` | Read-only investigation, agent writes a report file |
+| `pr-work` | Agent works in a worktree with a draft PR as chronicle |
 
 ## Documentation
 

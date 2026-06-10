@@ -10,8 +10,11 @@
 # Usage:
 #   dispatch.sh --root <project-root> --cwd <worktree-or-project-dir> \
 #     --kind <kind> --model <model> --agent <agent> \
-#     --prompt-file <path> --target <path> --task-id <id> \
-#     [--worktree <branch>]
+#     --prompt-file <path> [--target <path>] --task-id <id> \
+#     [--worktree <branch>] [--pr-title <title>]
+#
+# Note: --target is required for single-file-fix and headless-spike
+# but NOT required for pr-work.
 #
 # Exit codes:
 #   0 — task dispatched, .lock confirmed
@@ -34,6 +37,7 @@ PROMPT_FILE=""
 TARGET=""
 TASK_ID=""
 WORKTREE_BRANCH=""
+PR_TITLE=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -46,6 +50,7 @@ while [ "$#" -gt 0 ]; do
     --target)      TARGET="$2"; shift 2 ;;
     --task-id)     TASK_ID="$2"; shift 2 ;;
     --worktree)    WORKTREE_BRANCH="$2"; shift 2 ;;
+    --pr-title)    PR_TITLE="$2"; shift 2 ;;
     *)             err "unknown flag: $1" ;;
   esac
 done
@@ -57,7 +62,25 @@ done
 : "${AGENT:=default}"
 [ "$AGENT" != "-" ]  || AGENT="default"
 [ -n "$PROMPT_FILE" ] || err "--prompt-file is required"
-[ -n "$TARGET" ]      || err "--target is required"
+# pr-work kind doesn't require --target (works on whole worktree)
+if [ "$KIND" != "pr-work" ]; then
+  [ -n "$TARGET" ] || err "--target is required"
+fi
+
+# pr-work kind requires --worktree
+if [ "$KIND" = "pr-work" ]; then
+  [ -n "$WORKTREE_BRANCH" ] || err "pr-work kind requires --worktree"
+  case "$WORKTREE_BRANCH" in
+    *[!A-Za-z0-9_.-]*|"") err "unsafe worktree branch: '$WORKTREE_BRANCH'" ;;
+  esac
+fi
+
+# Validate pr_title if provided (reject control characters)
+if [ -n "$PR_TITLE" ]; then
+  case "$PR_TITLE" in
+    *[![:print:]]*) err "pr_title contains non-printable characters: '$PR_TITLE'" ;;
+  esac
+fi
 [ -n "$TASK_ID" ]     || err "--task-id is required"
 
 [ -d "$ROOT" ]        || err "root does not exist: $ROOT"
@@ -105,50 +128,103 @@ case "$KIND" in
   single-file-fix)
     TPL="$TEMPLATES_DIR/single-file-fix.sh.j2"
     [ -f "$TPL" ] || err "no template for kind=$KIND: $TPL"
-    python3 -c "
-import shlex, sys
-with open('$TPL') as f:
+    export TPL TASK_ID TS CWD TASK_DIR MODEL AGENT TARGET
+    python3 << 'PYEOF' 2>"$TASK_DIR/template-render-errors.log" || err "template rendering failed (see template-render-errors.log)"
+import os, shlex, sys
+tpl_path = os.environ['TPL']
+task_id = os.environ['TASK_ID']
+ts = os.environ['TS']
+cwd = os.environ['CWD']
+task_dir = os.environ['TASK_DIR']
+model = os.environ['MODEL']
+agent = os.environ['AGENT']
+target = os.environ['TARGET']
+with open(tpl_path) as f:
     tpl = f.read()
 vars = {
-    'task_id':       shlex.quote('$TASK_ID'),
-    'generated_at':  '$TS',
-    'cwd':           shlex.quote('$CWD'),
-    'task_dir':      shlex.quote('$TASK_DIR'),
-    'model':         shlex.quote('$MODEL'),
-    'agent':         shlex.quote('$AGENT'),
-    'target_file':   shlex.quote('$TARGET'),
+    'task_id':       shlex.quote(task_id),
+    'generated_at':  ts,
+    'cwd':           shlex.quote(cwd),
+    'task_dir':      shlex.quote(task_dir),
+    'model':         shlex.quote(model),
+    'agent':         shlex.quote(agent),
+    'target_file':   shlex.quote(target),
 }
 for k, v in vars.items():
     tpl = tpl.replace('{{ ' + k + ' | shellquote }}', v)
     tpl = tpl.replace('{{ ' + k + ' }}', v)
-with open('$TASK_DIR/start-subagent.sh', 'w') as f:
+with open(os.path.join(task_dir, 'start-subagent.sh'), 'w') as f:
     f.write(tpl)
-" 2>/dev/null || err "template rendering failed"
+PYEOF
     ;;
   headless-spike)
     TPL="$TEMPLATES_DIR/headless-spike.sh.j2"
     [ -f "$TPL" ] || err "no template for kind=$KIND: $TPL"
-    python3 -c "
-import shlex, sys
-with open('$TPL') as f:
+    export TPL TASK_ID TS CWD TASK_DIR MODEL AGENT TARGET
+    python3 << 'PYEOF' 2>"$TASK_DIR/template-render-errors.log" || err "template rendering failed (see template-render-errors.log)"
+import os, shlex, sys
+tpl_path = os.environ['TPL']
+task_id = os.environ['TASK_ID']
+ts = os.environ['TS']
+cwd = os.environ['CWD']
+task_dir = os.environ['TASK_DIR']
+model = os.environ['MODEL']
+agent = os.environ['AGENT']
+target = os.environ['TARGET']
+with open(tpl_path) as f:
     tpl = f.read()
 vars = {
-    'task_id':       shlex.quote('$TASK_ID'),
-    'generated_at':  '$TS',
-    'cwd':           shlex.quote('$CWD'),
-    'task_dir':      shlex.quote('$TASK_DIR'),
-    'model':         shlex.quote('$MODEL'),
-    'agent':         shlex.quote('$AGENT'),
-    'report_path':   shlex.quote('$TARGET'),
+    'task_id':       shlex.quote(task_id),
+    'generated_at':  ts,
+    'cwd':           shlex.quote(cwd),
+    'task_dir':      shlex.quote(task_dir),
+    'model':         shlex.quote(model),
+    'agent':         shlex.quote(agent),
+    'report_path':   shlex.quote(target),
 }
 for k, v in vars.items():
     tpl = tpl.replace('{{ ' + k + ' | shellquote }}', v)
     tpl = tpl.replace('{{ ' + k + ' }}', v)
-with open('$TASK_DIR/start-subagent.sh', 'w') as f:
+with open(os.path.join(task_dir, 'start-subagent.sh'), 'w') as f:
     f.write(tpl)
-" 2>/dev/null || err "template rendering failed"
+PYEOF
     ;;
-  *) err "unknown kind: $KIND (single-file-fix | headless-spike)" ;;
+  pr-work)
+    TPL="$TEMPLATES_DIR/pr-work.sh.j2"
+    [ -f "$TPL" ] || err "no template for kind=$KIND: $TPL"
+    PR_TITLE="${PR_TITLE:-$TASK_ID}"
+    export TPL TASK_ID TS CWD TASK_DIR MODEL AGENT WORKTREE_BRANCH PR_TITLE
+    python3 << 'PYEOF' 2>"$TASK_DIR/template-render-errors.log" || err "template rendering failed (see template-render-errors.log)"
+import os, shlex, sys
+tpl_path = os.environ['TPL']
+task_id = os.environ['TASK_ID']
+ts = os.environ['TS']
+cwd = os.environ['CWD']
+task_dir = os.environ['TASK_DIR']
+model = os.environ['MODEL']
+agent = os.environ['AGENT']
+branch = os.environ['WORKTREE_BRANCH']
+pr_title = os.environ['PR_TITLE']
+with open(tpl_path) as f:
+    tpl = f.read()
+vars = {
+    'task_id':      shlex.quote(task_id),
+    'generated_at': ts,
+    'cwd':          shlex.quote(cwd),
+    'task_dir':     shlex.quote(task_dir),
+    'model':        shlex.quote(model),
+    'agent':        shlex.quote(agent),
+    'branch':       shlex.quote(branch),
+    'pr_title':     shlex.quote(pr_title),
+}
+for k, v in vars.items():
+    tpl = tpl.replace('{{ ' + k + ' | shellquote }}', v)
+    tpl = tpl.replace('{{ ' + k + ' }}', v)
+with open(os.path.join(task_dir, 'start-subagent.sh'), 'w') as f:
+    f.write(tpl)
+PYEOF
+    ;;
+  *) err "unknown kind: $KIND (single-file-fix | headless-spike | pr-work)" ;;
 esac
 
 chmod +x "$TASK_DIR/start-subagent.sh"
