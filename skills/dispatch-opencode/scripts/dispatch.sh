@@ -78,7 +78,7 @@ fi
 # Validate pr_title if provided (reject control characters)
 if [ -n "$PR_TITLE" ]; then
   case "$PR_TITLE" in
-    *[![:print:]\t]*) err "pr_title contains non-printable characters: '$PR_TITLE'" ;;
+    *[![:print:]]*) err "pr_title contains non-printable characters: '$PR_TITLE'" ;;
   esac
 fi
 [ -n "$TASK_ID" ]     || err "--task-id is required"

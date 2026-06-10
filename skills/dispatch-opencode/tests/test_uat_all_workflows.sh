@@ -89,32 +89,29 @@ tasks:
     target: src/foo.py
 YAML
 
-OUT=$("$RUN_PLAN" --plan plan1.yaml 2>/dev/null) || { err "run-plan.sh failed"; goto_next=1; }
-if [ -z "${goto_next:-}" ]; then
-  echo "$OUT" | parse_json_field "['tasks'][0]['status']" | grep -q dispatched \
-    && ok "task dispatched" || err "task not dispatched"
-  LOCKFILE=$(echo "$OUT" | parse_json_field "['tasks'][0]['lockfile']")
-  TASK_DIR=$(echo "$OUT" | parse_json_field "['tasks'][0]['task_dir']")
-  PID=$(echo "$OUT" | parse_json_field "['tasks'][0]['pid']")
+OUT=$("$RUN_PLAN" --plan plan1.yaml 2>/dev/null) || { err "run-plan.sh failed"; }
+echo "$OUT" | parse_json_field "['tasks'][0]['status']" | grep -q dispatched \
+  && ok "task dispatched" || err "task not dispatched"
+LOCKFILE=$(echo "$OUT" | parse_json_field "['tasks'][0]['lockfile']")
+TASK_DIR=$(echo "$OUT" | parse_json_field "['tasks'][0]['task_dir']")
+PID=$(echo "$OUT" | parse_json_field "['tasks'][0]['pid']")
 
-  [ -f "$LOCKFILE" ] && ok ".lock exists while running" || err ".lock missing during run"
-  [ -d "$TASK_DIR" ] && ok "task dir exists" || err "task dir missing"
-  [ -f "$TASK_DIR/prompt.md" ] && ok "prompt.md copied" || err "prompt.md missing"
-  [ -f "$TASK_DIR/start-subagent.sh" ] && ok "start-subagent.sh rendered" || err "start-subagent.sh missing"
+[ -f "$LOCKFILE" ] && ok ".lock exists while running" || err ".lock missing during run"
+[ -d "$TASK_DIR" ] && ok "task dir exists" || err "task dir missing"
+[ -f "$TASK_DIR/prompt.md" ] && ok "prompt.md copied" || err "prompt.md missing"
+[ -f "$TASK_DIR/start-subagent.sh" ] && ok "start-subagent.sh rendered" || err "start-subagent.sh missing"
 
-  if wait_for_lockfile_gone "$LOCKFILE" 60; then
-    ok "subagent completed (.lock removed)"
-  else
-    err "subagent did not complete within 120s"
-  fi
-
-  [ -f "$TASK_DIR/FINAL_OUTPUT.md" ] && ok "FINAL_OUTPUT.md written" || err "FINAL_OUTPUT.md missing"
-  [ -s "$TASK_DIR/events.jsonl" ] && ok "events.jsonl has content" || err "events.jsonl empty"
-
-  "$CLEANUP" --task-id fix-foo --root "$WORK" 2>/dev/null && ok "cleanup succeeded" || err "cleanup failed"
-  [ ! -d "$TASK_DIR" ] && ok "task dir removed" || err "task dir persists after cleanup"
+if wait_for_lockfile_gone "$LOCKFILE" 60; then
+  ok "subagent completed (.lock removed)"
+else
+  err "subagent did not complete within 120s"
 fi
-unset goto_next
+
+[ -f "$TASK_DIR/FINAL_OUTPUT.md" ] && ok "FINAL_OUTPUT.md written" || err "FINAL_OUTPUT.md missing"
+[ -s "$TASK_DIR/events.jsonl" ] && ok "events.jsonl has content" || err "events.jsonl empty"
+
+"$CLEANUP" --task-id fix-foo --root "$WORK" 2>/dev/null && ok "cleanup succeeded" || err "cleanup failed"
+[ ! -d "$TASK_DIR" ] && ok "task dir removed" || err "task dir persists after cleanup"
 
 # ── Test 2: Parallelize N tasks via run-plan.sh ──
 
@@ -137,23 +134,20 @@ tasks:
     target: src/bar.py
 YAML
 
-OUT=$("$RUN_PLAN" --plan plan2.yaml 2>/dev/null) || { err "run-plan.sh failed for parallel plan"; goto_next=1; }
-if [ -z "${goto_next:-}" ]; then
-  TASK_COUNT=$(echo "$OUT" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['tasks']))" 2>/dev/null)
-  [ "$TASK_COUNT" -eq 2 ] && ok "2 tasks dispatched" || err "expected 2 tasks, got $TASK_COUNT"
+OUT=$("$RUN_PLAN" --plan plan2.yaml 2>/dev/null) || { err "run-plan.sh failed for parallel plan"; }
+TASK_COUNT=$(echo "$OUT" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['tasks']))" 2>/dev/null)
+[ "$TASK_COUNT" -eq 2 ] && ok "2 tasks dispatched" || err "expected 2 tasks, got $TASK_COUNT"
 
-  LF1=$(echo "$OUT" | parse_json_field "['tasks'][0]['lockfile']")
-  LF2=$(echo "$OUT" | parse_json_field "['tasks'][1]['lockfile']")
+LF1=$(echo "$OUT" | parse_json_field "['tasks'][0]['lockfile']")
+LF2=$(echo "$OUT" | parse_json_field "['tasks'][1]['lockfile']")
 
-  # Wait for both
-  wait_for_lockfile_gone "$LF1" 90 && ok "task 1 completed" || err "task 1 did not complete"
-  wait_for_lockfile_gone "$LF2" 90 && ok "task 2 completed" || err "task 2 did not complete"
+# Wait for both
+wait_for_lockfile_gone "$LF1" 90 && ok "task 1 completed" || err "task 1 did not complete"
+wait_for_lockfile_gone "$LF2" 90 && ok "task 2 completed" || err "task 2 did not complete"
 
-  # Cleanup both
-  "$CLEANUP" --task-id fix-foo-par --root "$WORK" 2>/dev/null && ok "task 1 cleanup" || err "task 1 cleanup failed"
-  "$CLEANUP" --task-id fix-bar-par --root "$WORK" 2>/dev/null && ok "task 2 cleanup" || err "task 2 cleanup failed"
-fi
-unset goto_next
+# Cleanup both
+"$CLEANUP" --task-id fix-foo-par --root "$WORK" 2>/dev/null && ok "task 1 cleanup" || err "task 1 cleanup failed"
+"$CLEANUP" --task-id fix-bar-par --root "$WORK" 2>/dev/null && ok "task 2 cleanup" || err "task 2 cleanup failed"
 
 # ── Test 3: Worktree isolation + cleanup ──
 
@@ -165,26 +159,23 @@ OUT=$("$DISPATCH" \
   --kind single-file-fix --model "ollama-cloud/deepseek-v4-flash:cloud" \
   --agent build --prompt-file "$WORK/prompt-fix-foo.md" \
   --target src/foo.py --task-id wt-test \
-  --worktree wt-test-branch 2>/dev/null) || { err "dispatch with worktree failed"; goto_next=1; }
-if [ -z "${goto_next:-}" ]; then
-  WT=$(echo "$OUT" | parse_json_field "['worktree']")
-  [ "$WT" != "None" ] && [ -n "$WT" ] && ok "worktree in JSON" || err "worktree missing from JSON"
-  [ -d "$WORK/.subagents/wt-test/worktree" ] && ok "worktree dir exists" || err "worktree dir missing"
-  [ -L "$WORK/.worktrees/wt-test" ] && ok "worktree symlink exists" || err "worktree symlink missing"
+  --worktree wt-test-branch 2>/dev/null) || { err "dispatch with worktree failed"; }
+WT=$(echo "$OUT" | parse_json_field "['worktree']")
+[ "$WT" != "None" ] && [ -n "$WT" ] && ok "worktree in JSON" || err "worktree missing from JSON"
+[ -d "$WORK/.subagents/wt-test/worktree" ] && ok "worktree dir exists" || err "worktree dir missing"
+[ -L "$WORK/.worktrees/wt-test" ] && ok "worktree symlink exists" || err "worktree symlink missing"
 
-  # Verify branch exists
-  git -C "$WORK" branch --list wt-test-branch | grep -q wt-test-branch \
-    && ok "worktree branch created" || err "worktree branch missing"
+# Verify branch exists
+git -C "$WORK" branch --list wt-test-branch | grep -q wt-test-branch \
+  && ok "worktree branch created" || err "worktree branch missing"
 
-  LOCKFILE=$(echo "$OUT" | parse_json_field "['lockfile']")
-  wait_for_lockfile_gone "$LOCKFILE" 60 || true
+LOCKFILE=$(echo "$OUT" | parse_json_field "['lockfile']")
+wait_for_lockfile_gone "$LOCKFILE" 60 || true
 
-  # Cleanup worktree
-  "$CLEANUP" --task-id wt-test --root "$WORK" 2>/dev/null && ok "worktree cleanup succeeded" || err "worktree cleanup failed"
-  [ ! -d "$WORK/.subagents/wt-test" ] && ok "task dir removed" || err "task dir persists"
-  [ ! -L "$WORK/.worktrees/wt-test" ] && ok "symlink removed" || err "symlink persists"
-fi
-unset goto_next
+# Cleanup worktree
+"$CLEANUP" --task-id wt-test --root "$WORK" 2>/dev/null && ok "worktree cleanup succeeded" || err "worktree cleanup failed"
+[ ! -d "$WORK/.subagents/wt-test" ] && ok "task dir removed" || err "task dir persists"
+[ ! -L "$WORK/.worktrees/wt-test" ] && ok "symlink removed" || err "symlink persists"
 
 # ── Test 4: subagent-abandon (kill + force cleanup) ──
 
@@ -197,19 +188,16 @@ OUT=$("$DISPATCH" \
   --kind single-file-fix --model "ollama-cloud/deepseek-v4-flash:cloud" \
   --agent build --prompt-file "$WORK/prompt-fix-foo.md" \
   --target src/foo.py --task-id abandon-test \
-  --worktree abandon-test-branch 2>/dev/null) || { err "dispatch for abandon test failed"; goto_next=1; }
-if [ -z "${goto_next:-}" ]; then
-  TASK_DIR="$WORK/.subagents/abandon-test"
-  [ -d "$TASK_DIR" ] && ok "task dir exists before abandon" || err "task dir missing before abandon"
-  [ -L "$WORK/.worktrees/abandon-test" ] && ok "worktree symlink before abandon" || err "worktree symlink missing"
+  --worktree abandon-test-branch 2>/dev/null) || { err "dispatch for abandon test failed"; }
+TASK_DIR="$WORK/.subagents/abandon-test"
+[ -d "$TASK_DIR" ] && ok "task dir exists before abandon" || err "task dir missing before abandon"
+[ -L "$WORK/.worktrees/abandon-test" ] && ok "worktree symlink before abandon" || err "worktree symlink missing"
 
-  "$ABANDON" --task-id abandon-test --root "$WORK" 2>/dev/null && ok "abandon succeeded" || err "abandon failed"
-  [ ! -d "$TASK_DIR" ] && ok "task dir removed after abandon" || err "task dir persists after abandon"
-  [ ! -L "$WORK/.worktrees/abandon-test" ] && ok "worktree symlink removed after abandon" || err "symlink persists"
-  git -C "$WORK" branch --list abandon-test-branch | grep -q abandon-test-branch \
-    && err "branch still exists after abandon" || ok "branch deleted after abandon"
-fi
-unset goto_next
+"$ABANDON" --task-id abandon-test --root "$WORK" 2>/dev/null && ok "abandon succeeded" || err "abandon failed"
+[ ! -d "$TASK_DIR" ] && ok "task dir removed after abandon" || err "task dir persists after abandon"
+[ ! -L "$WORK/.worktrees/abandon-test" ] && ok "worktree symlink removed after abandon" || err "symlink persists"
+git -C "$WORK" branch --list abandon-test-branch | grep -q abandon-test-branch \
+  && err "branch still exists after abandon" || ok "branch deleted after abandon"
 
 # ── Test 5: cleanup-stale.sh ──
 
@@ -281,20 +269,17 @@ tasks:
     target: reports/spike.md
 YAML
 
-OUT=$("$RUN_PLAN" --plan plan7.yaml 2>/dev/null) || { err "headless-spike run-plan failed"; goto_next=1; }
-if [ -z "${goto_next:-}" ]; then
-  STATUS=$(echo "$OUT" | parse_json_field "['tasks'][0]['status']")
-  [ "$STATUS" = "dispatched" ] && ok "headless-spike dispatched" || err "headless-spike not dispatched (status=$STATUS)"
+OUT=$("$RUN_PLAN" --plan plan7.yaml 2>/dev/null) || { err "headless-spike run-plan failed"; }
+STATUS=$(echo "$OUT" | parse_json_field "['tasks'][0]['status']")
+[ "$STATUS" = "dispatched" ] && ok "headless-spike dispatched" || err "headless-spike not dispatched (status=$STATUS)"
 
-  LOCKFILE=$(echo "$OUT" | parse_json_field "['tasks'][0]['lockfile']")
-  TASK_DIR=$(echo "$OUT" | parse_json_field "['tasks'][0]['task_dir']")
+LOCKFILE=$(echo "$OUT" | parse_json_field "['tasks'][0]['lockfile']")
+TASK_DIR=$(echo "$OUT" | parse_json_field "['tasks'][0]['task_dir']")
 
-  wait_for_lockfile_gone "$LOCKFILE" 90 && ok "spike completed" || err "spike did not complete"
-  [ -f "$TASK_DIR/FINAL_OUTPUT.md" ] && ok "spike FINAL_OUTPUT.md present" || err "spike FINAL_OUTPUT.md missing"
+wait_for_lockfile_gone "$LOCKFILE" 90 && ok "spike completed" || err "spike did not complete"
+[ -f "$TASK_DIR/FINAL_OUTPUT.md" ] && ok "spike FINAL_OUTPUT.md present" || err "spike FINAL_OUTPUT.md missing"
 
-  "$CLEANUP" --task-id spike-1 --root "$WORK" 2>/dev/null || true
-fi
-unset goto_next
+"$CLEANUP" --task-id spike-1 --root "$WORK" 2>/dev/null || true
 
 # ── Test 8: Plan YAML validation (missing required fields) ──
 

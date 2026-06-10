@@ -2,7 +2,7 @@
 # Rendered dispatch script — single-file-fix
 #
 # Writes .lock on start, FINAL_OUTPUT.md on completion, deletes .lock on exit.
-set -uo pipefail
+set -euo pipefail
 
 TASK_DIR={{ task_dir | shellquote }}
 TASK_ID={{ task_id | shellquote }}
@@ -52,7 +52,7 @@ fi
   2> "$TASK_DIR/stderr.log" \
   | tee "$TASK_DIR/events.jsonl" \
   > "$TASK_DIR/stdout.log"
-EXIT=$?
+EXIT=${PIPESTATUS[0]}
 
 SESSION_ID=$(head -1 "$TASK_DIR/events.jsonl" 2>/dev/null | sed 's/.*"sessionID":"\([^"]*\)".*/\1/' || echo "")
 
