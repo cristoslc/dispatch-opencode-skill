@@ -20,7 +20,7 @@ KEEP=0; [ "${1:-}" = "--keep" ] && KEEP=1
 PASS=0
 FAIL=0
 
-ok()  { PASS=$((PASS + 1)); printf '  PASS %s\n' "$*"; }
+ok() { PASS=$((PASS + 1)); printf '  PASS %s\n' "$*"; }
 err() { FAIL=$((FAIL + 1)); printf '  FAIL %s\n' "$*" >&2; }
 
 WORK=$(mktemp -d /tmp/oc-tsv-test.XXXXXX)
@@ -71,7 +71,7 @@ else
   ok "TSV has no consecutive tabs"
 fi
 
-# Verify 7 fields
+# Verify 8 fields
 FIELD_COUNT=$(echo "$TSV_OUT" | awk -F'\t' '{print NF}')
 [ "$FIELD_COUNT" -eq 8 ] && ok "TSV has exactly 8 fields" || err "TSV has $FIELD_COUNT fields (expected 8)"
 
@@ -82,6 +82,10 @@ AGENT_FIELD=$(echo "$TSV_OUT" | awk -F'\t' '{print $4}')
 # Verify worktree field is '-'
 WT_FIELD=$(echo "$TSV_OUT" | awk -F'\t' '{print $7}')
 [ "$WT_FIELD" = "-" ] && ok "empty worktree becomes '-'" || err "worktree field is '$WT_FIELD' (expected '-')"
+
+# Verify pr_title field is '-'
+PT_FIELD=$(echo "$TSV_OUT" | awk -F'\t' '{print $8}')
+[ "$PT_FIELD" = "-" ] && ok "empty pr_title becomes '-'" || err "pr_title field is '$PT_FIELD' (expected '-')"
 
 echo "  Testing: TSV with all fields populated..."
 TSV_FULL=$(python3 -c "
@@ -109,6 +113,14 @@ AGENT2=$(echo "$TSV_FULL" | awk -F'\t' '{print $4}')
 
 WT2=$(echo "$TSV_FULL" | awk -F'\t' '{print $7}')
 [ "$WT2" = "my-branch" ] && ok "populated worktree passes through" || err "worktree is '$WT2' (expected 'my-branch')"
+
+PT2=$(echo "$TSV_FULL" | awk -F'\t' '{print $8}')
+[ "$PT2" = "My PR" ] && ok "populated pr_title passes through" || err "pr_title is '$PT2' (expected 'My PR')"
+
+# Full TSV round-trip through bash IFS read
+while IFS=$'\t' read -r TID2 TKIND2 TMODEL2 TAGENT2 TPROMPT2 TTARGET2 TWORKTREE2 TPR_TITLE2; do
+  [ "$TPR_TITLE2" = "My PR" ] && ok "full TSV pr_title round-trips through bash IFS" || err "TPR_TITLE2='$TPR_TITLE2' (expected 'My PR')"
+done <<< "$TSV_FULL"
 
 # ── Unit: bash IFS=$'\t' read does not shift fields ──
 

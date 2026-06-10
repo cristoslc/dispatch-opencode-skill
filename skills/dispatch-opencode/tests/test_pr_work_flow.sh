@@ -22,7 +22,7 @@ CLEANUP="$SKILL_DIR/scripts/subagent-cleanup.sh"
 KEEP=0; [ "${1:-}" = "--keep" ] && KEEP=1
 
 err() { printf 'test: FAIL %s\n' "$*" >&2; exit 1; }
-ok()  { printf 'test: PASS %s\n' "$*"; }
+ok() { printf 'test: PASS %s\n' "$*"; }
 
 WORK=$(mktemp -d /tmp/oc-pr-work.XXXXXX)
 trap '[ "$KEEP" -eq 1 ] && echo "kept $WORK" || rm -rf "$WORK"' EXIT
@@ -113,7 +113,7 @@ grep -q 'PR_URL' "$START_SCRIPT" && ok "start script contains PR_URL" || err "mi
 [ -f "$TASK_DIR/prompt.md" ] && ok "prompt.md copied" || err "prompt.md missing"
 
 # Poll for completion (generous timeout since this is a real opencode run)
-for i in $(seq 1 90); do
+for ((i=1; i<=90; i++)); do
   [ ! -f "$LOCKFILE" ] && break
   sleep 2
 done

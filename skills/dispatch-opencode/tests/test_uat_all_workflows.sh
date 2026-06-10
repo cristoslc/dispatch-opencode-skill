@@ -32,7 +32,7 @@ KEEP=0; [ "${1:-}" = "--keep" ] && KEEP=1
 PASS=0
 FAIL=0
 
-ok()  { PASS=$((PASS + 1)); printf '  PASS %s\n' "$*"; }
+ok() { PASS=$((PASS + 1)); printf '  PASS %s\n' "$*"; }
 err() { FAIL=$((FAIL + 1)); printf '  FAIL %s\n' "$*" >&2; }
 
 WORK=$(mktemp -d /tmp/oc-uat.XXXXXX)
@@ -60,7 +60,7 @@ setup_repo() {
 wait_for_lockfile_gone() {
   local lf="$1"
   local max="${2:-60}"
-  for i in $(seq 1 "$max"); do
+  for ((i=1; i<=max; i++)); do
     [ ! -f "$lf" ] && return 0
     sleep 2
   done
