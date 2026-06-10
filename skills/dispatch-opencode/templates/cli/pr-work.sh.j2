@@ -71,7 +71,7 @@ fi
   > "$TASK_DIR/stdout.log"
 EXIT=${PIPESTATUS[0]}
 
-SESSION_ID=$(python3 -c "import json,sys; print(json.load(sys.stdin).get('sessionID',''))" < "$TASK_DIR/events.jsonl" 2>/dev/null || echo "")
+SESSION_ID=$(head -1 "$TASK_DIR/events.jsonl" 2>/dev/null | sed 's/.*"sessionID":"\([^"]*\)".*/\1/' || echo "")
 
 cat > "$TASK_DIR/FINAL_OUTPUT.md" <<OUT
 # dispatch-opencode result
