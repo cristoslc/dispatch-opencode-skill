@@ -34,6 +34,7 @@ PROMPT_FILE=""
 TARGET=""
 TASK_ID=""
 WORKTREE_BRANCH=""
+PR_TITLE=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -46,6 +47,7 @@ while [ "$#" -gt 0 ]; do
     --target)      TARGET="$2"; shift 2 ;;
     --task-id)     TASK_ID="$2"; shift 2 ;;
     --worktree)    WORKTREE_BRANCH="$2"; shift 2 ;;
+    --pr-title)    PR_TITLE="$2"; shift 2 ;;
     *)             err "unknown flag: $1" ;;
   esac
 done
@@ -57,7 +59,15 @@ done
 : "${AGENT:=default}"
 [ "$AGENT" != "-" ]  || AGENT="default"
 [ -n "$PROMPT_FILE" ] || err "--prompt-file is required"
-[ -n "$TARGET" ]      || err "--target is required"
+# pr-work kind doesn't require --target (works on whole worktree)
+if [ "$KIND" != "pr-work" ]; then
+  [ -n "$TARGET" ] || err "--target is required"
+fi
+
+# pr-work kind requires --worktree
+if [ "$KIND" = "pr-work" ] && [ -z "$WORKTREE_BRANCH" ]; then
+  err "pr-work kind requires --worktree"
+fi
 [ -n "$TASK_ID" ]     || err "--task-id is required"
 
 [ -d "$ROOT" ]        || err "root does not exist: $ROOT"
@@ -148,7 +158,34 @@ with open('$TASK_DIR/start-subagent.sh', 'w') as f:
     f.write(tpl)
 " 2>/dev/null || err "template rendering failed"
     ;;
-  *) err "unknown kind: $KIND (single-file-fix | headless-spike)" ;;
+  pr-work)
+    TPL="$TEMPLATES_DIR/pr-work.sh.j2"
+    [ -f "$TPL" ] || err "no template for kind=$KIND: $TPL"
+    PR_TITLE="${PR_TITLE:-$TASK_ID}"
+    python3 -c "
+import shlex, sys
+with open('$TPL') as f:
+    tpl = f.read()
+BRANCH_SAFE = shlex.quote('$WORKTREE_BRANCH')
+PR_TITLE_SAFE = shlex.quote('$PR_TITLE')
+vars = {
+    'task_id':      shlex.quote('$TASK_ID'),
+    'generated_at': '$TS',
+    'cwd':          shlex.quote('$CWD'),
+    'task_dir':     shlex.quote('$TASK_DIR'),
+    'model':        shlex.quote('$MODEL'),
+    'agent':        shlex.quote('$AGENT'),
+    'branch':       BRANCH_SAFE,
+    'pr_title':     PR_TITLE_SAFE,
+}
+for k, v in vars.items():
+    tpl = tpl.replace('{{ ' + k + ' | shellquote }}', v)
+    tpl = tpl.replace('{{ ' + k + ' }}', v)
+with open('$TASK_DIR/start-subagent.sh', 'w') as f:
+    f.write(tpl)
+" 2>/dev/null || err "template rendering failed"
+    ;;
+  *) err "unknown kind: $KIND (single-file-fix | headless-spike | pr-work)" ;;
 esac
 
 chmod +x "$TASK_DIR/start-subagent.sh"

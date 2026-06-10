@@ -121,3 +121,51 @@ The session ID is in the first line of `events.jsonl`:
 ```sh
 head -1 .subagents/<task-id>/events.jsonl | jq -r '.sessionID'
 ```
+
+## PR-work flow
+
+Create a draft PR and dispatch an agent to work in the worktree:
+
+```sh
+# 1. Write the plan
+cat > plan.yaml <<'YAML'
+tasks:
+  - id: implement-feature
+    kind: pr-work
+    model: ollama-cloud/deepseek-v4-flash:cloud
+    agent: build
+    prompt: prompts/feature-plan.md
+    worktree: feat-123-branch
+    pr_title: "Feat: implement feature X"
+YAML
+
+# 2. Write the prompt (becomes the PR body)
+echo '# Feature X
+
+Implement feature X according to the spec at docs/specs/feature-x.md.
+
+## Working guidelines
+- Commit and push your progress
+- Add PR comments for each significant checkpoint
+- All tests must pass before completion' > prompts/feature-plan.md
+
+# 3. Dispatch
+result=$(bash skills/dispatch-opencode/scripts/run-plan.sh --plan plan.yaml)
+task_dir=$(echo "$result" | python3 -c "import json,sys; print(json.load(sys.stdin)['tasks'][0]['task_dir'])")
+
+# 4. Poll for completion
+bash skills/dispatch-opencode/scripts/poll-subagent.sh \
+  --task-id implement-feature --root "$(git rev-parse --show-toplevel)" \
+  --max-polls 24 --stale-threshold 120
+
+# 5. Read result (includes PR URL)
+cat "$task_dir/FINAL_OUTPUT.md"
+
+# 6. Clean up worktree only (branch + PR survive on remote)
+bash skills/dispatch-opencode/scripts/subagent-cleanup.sh \
+  --task-id implement-feature --root "$(git rev-parse --show-toplevel)"
+
+# 7. Operator reviews the PR with full chronicle in comments/commits
+# Optional: mark PR ready for review
+gh pr ready implement-feature
+```

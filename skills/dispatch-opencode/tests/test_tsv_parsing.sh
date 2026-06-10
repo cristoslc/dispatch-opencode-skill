@@ -58,9 +58,11 @@ for t in tasks:
     prompt = t.get('prompt', '')
     target = t.get('target', '')
     worktree = t.get('worktree', '')
+    pr_title = t.get('pr_title', '')
     agent = agent if agent else '-'
     worktree = worktree if worktree else '-'
-    print(f'{tid}\t{kind}\t{model}\t{agent}\t{prompt}\t{target}\t{worktree}')
+    pr_title = pr_title if pr_title else '-'
+    print(f'{tid}\t{kind}\t{model}\t{agent}\t{prompt}\t{target}\t{worktree}\t{pr_title}')
 ")
 # Verify no consecutive tabs (the original bug)
 if echo "$TSV_OUT" | grep $'\t\t'; then
@@ -71,7 +73,7 @@ fi
 
 # Verify 7 fields
 FIELD_COUNT=$(echo "$TSV_OUT" | awk -F'\t' '{print NF}')
-[ "$FIELD_COUNT" -eq 7 ] && ok "TSV has exactly 7 fields" || err "TSV has $FIELD_COUNT fields (expected 7)"
+[ "$FIELD_COUNT" -eq 8 ] && ok "TSV has exactly 8 fields" || err "TSV has $FIELD_COUNT fields (expected 8)"
 
 # Verify agent field is '-'
 AGENT_FIELD=$(echo "$TSV_OUT" | awk -F'\t' '{print $4}')
@@ -84,7 +86,7 @@ WT_FIELD=$(echo "$TSV_OUT" | awk -F'\t' '{print $7}')
 echo "  Testing: TSV with all fields populated..."
 TSV_FULL=$(python3 -c "
 import yaml
-tasks = [{'id': 't2', 'kind': 'single-file-fix', 'model': 'mymodel', 'agent': 'explore', 'prompt': 'p.md', 'target': 's/f.py', 'worktree': 'my-branch'}]
+tasks = [{'id': 't2', 'kind': 'single-file-fix', 'model': 'mymodel', 'agent': 'explore', 'prompt': 'p.md', 'target': 's/f.py', 'worktree': 'my-branch', 'pr_title': 'My PR'}]
 for t in tasks:
     tid = t.get('id', '')
     kind = t.get('kind', '')
@@ -93,12 +95,14 @@ for t in tasks:
     prompt = t.get('prompt', '')
     target = t.get('target', '')
     worktree = t.get('worktree', '')
+    pr_title = t.get('pr_title', '')
     agent = agent if agent else '-'
     worktree = worktree if worktree else '-'
-    print(f'{tid}\t{kind}\t{model}\t{agent}\t{prompt}\t{target}\t{worktree}')
+    pr_title = pr_title if pr_title else '-'
+    print(f'{tid}\t{kind}\t{model}\t{agent}\t{prompt}\t{target}\t{worktree}\t{pr_title}')
 ")
 FIELD_COUNT2=$(echo "$TSV_FULL" | awk -F'\t' '{print NF}')
-[ "$FIELD_COUNT2" -eq 7 ] && ok "full TSV has 7 fields" || err "full TSV has $FIELD_COUNT2 fields"
+[ "$FIELD_COUNT2" -eq 8 ] && ok "full TSV has 8 fields" || err "full TSV has $FIELD_COUNT2 fields"
 
 AGENT2=$(echo "$TSV_FULL" | awk -F'\t' '{print $4}')
 [ "$AGENT2" = "explore" ] && ok "populated agent passes through" || err "agent is '$AGENT2' (expected 'explore')"
@@ -111,7 +115,7 @@ WT2=$(echo "$TSV_FULL" | awk -F'\t' '{print $7}')
 echo "--- Unit: bash IFS tab-read field alignment ---"
 
 echo "  Testing: placeholder TSV round-trips through bash correctly..."
-while IFS=$'\t' read -r TID TKIND TMODEL TAGENT TPROMPT TTARGET TWORKTREE; do
+while IFS=$'\t' read -r TID TKIND TMODEL TAGENT TPROMPT TTARGET TWORKTREE TPR_TITLE; do
   [ "$TID" = "t1" ] && ok "TID=t1" || err "TID='$TID' (expected t1)"
   [ "$TKIND" = "single-file-fix" ] && ok "TKIND=single-file-fix" || err "TKIND='$TKIND'"
   [ "$TMODEL" = "m" ] && ok "TMODEL=m" || err "TMODEL='$TMODEL'"
@@ -119,6 +123,7 @@ while IFS=$'\t' read -r TID TKIND TMODEL TAGENT TPROMPT TTARGET TWORKTREE; do
   [ "$TPROMPT" = "p.md" ] && ok "TPROMPT=p.md" || err "TPROMPT='$TPROMPT'"
   [ "$TTARGET" = "s/f.py" ] && ok "TTARGET=s/f.py" || err "TTARGET='$TTARGET'"
   [ "$TWORKTREE" = "-" ] && ok "TWORKTREE=-" || err "TWORKTREE='$TWORKTREE'"
+  [ "$TPR_TITLE" = "-" ] && ok "TPR_TITLE=-" || err "TPR_TITLE='$TPR_TITLE'"
 done <<< "$TSV_OUT"
 
 # ── Unit: dispatch.sh agent defaulting ──
