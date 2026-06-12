@@ -63,7 +63,7 @@ done
 [ "$AGENT" != "-" ]  || AGENT="default"
 [ -n "$PROMPT_FILE" ] || err "--prompt-file is required"
 # pr-work kind doesn't require --target (works on whole worktree)
-if [ "$KIND" != "pr-work" ]; then
+if [ "$KIND" != "pr-work" ] && [ "$KIND" != "multi-file-fix" ]; then
   [ -n "$TARGET" ] || err "--target is required"
 fi
 
@@ -224,7 +224,37 @@ with open(os.path.join(task_dir, 'start-subagent.sh'), 'w') as f:
     f.write(tpl)
 PYEOF
     ;;
-  *) err "unknown kind: $KIND (single-file-fix | headless-spike | pr-work)" ;;
+  multi-file-fix)
+    TPL="$TEMPLATES_DIR/multi-file-fix.sh.j2"
+    [ -f "$TPL" ] || err "no template for kind=$KIND: $TPL"
+    export TPL TASK_ID TS CWD TASK_DIR MODEL AGENT
+    python3 << 'PYEOF' 2>"$TASK_DIR/template-render-errors.log" || err "template rendering failed (see template-render-errors.log)"
+import os, shlex, sys
+tpl_path = os.environ['TPL']
+task_id = os.environ['TASK_ID']
+ts = os.environ['TS']
+cwd = os.environ['CWD']
+task_dir = os.environ['TASK_DIR']
+model = os.environ['MODEL']
+agent = os.environ['AGENT']
+with open(tpl_path) as f:
+    tpl = f.read()
+vars = {
+    'task_id':       shlex.quote(task_id),
+    'generated_at':  ts,
+    'cwd':           shlex.quote(cwd),
+    'task_dir':      shlex.quote(task_dir),
+    'model':         shlex.quote(model),
+    'agent':         shlex.quote(agent),
+}
+for k, v in vars.items():
+    tpl = tpl.replace('{{ ' + k + ' | shellquote }}', v)
+    tpl = tpl.replace('{{ ' + k + ' }}', v)
+with open(os.path.join(task_dir, 'start-subagent.sh'), 'w') as f:
+    f.write(tpl)
+PYEOF
+    ;;
+  *) err "unknown kind: $KIND (single-file-fix | multi-file-fix | headless-spike | pr-work)" ;;
 esac
 
 chmod +x "$TASK_DIR/start-subagent.sh"

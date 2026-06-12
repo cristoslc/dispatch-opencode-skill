@@ -127,6 +127,13 @@ tasks:
     target: src/auth.py
     worktree: fix-auth-branch     # optional. Branch name for worktree creation.
 
+  - id: refactor-api
+    kind: multi-file-fix
+    model: ollama-cloud/deepseek-v4-flash:cloud
+    agent: build
+    prompt: prompts/refactor-api.md
+    worktree: refactor-api-branch # optional
+
   - id: implement-feature
     kind: pr-work
     model: ollama-cloud/deepseek-v4-flash:cloud
@@ -138,8 +145,8 @@ tasks:
 
 Fields: `id` (required), `kind` (required), `model` (required),
 `prompt` (required, path to prompt file), `target` (required for
-single-file-fix, path inside cwd), `worktree` (optional, branch name),
-`agent` (optional, defaults per kind).
+single-file-fix, path inside cwd; not used for multi-file-fix),
+`worktree` (optional, branch name), `agent` (optional, defaults per kind).
 
 No `depends` field. The agent writes only tasks that are ready to run
 right now.
@@ -252,6 +259,7 @@ enforced by:
 | Kind | Status | Use for |
 |------|--------|---------|
 | `single-file-fix` | **available** | One agent edits one file from a focused prompt. Required: `target`. |
+| `multi-file-fix` | **available** | Full-directory fix/refactor with no single-file target. Works on the entire CWD. No `target` needed. |
 | `headless-spike` | **available** | Read-only investigation; agent writes a report file but does not edit source. Required: `target` (report path). Defaults to `--agent explore` (opencode's read-only built-in). |
 | `pr-work` | **available** | Creates a draft PR from the branch+worktree, then dispatches an agent to work in the worktree using the PR as chronicle. Required: `worktree`, `prompt`. Optional: `pr_title`. The subagent can push commits and add PR comments throughout its work. The PR and remote branch survive cleanup. |
 

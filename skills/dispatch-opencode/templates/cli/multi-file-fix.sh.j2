@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Rendered dispatch script — pr-work
+# Rendered dispatch script — multi-file-fix
 #
-# Creates a draft PR, then works in the worktree with the PR as chronicle.
-# Writes .lock on start, FINAL_OUTPUT.md on completion, deletes .lock on exit.
+# Works on the entire CWD. Writes .lock on start, FINAL_OUTPUT.md on
+# completion, deletes .lock on exit.
 set -euo pipefail
 
 TASK_DIR={{ task_dir | shellquote }}
@@ -11,14 +11,10 @@ GENERATED_AT={{ generated_at | shellquote }}
 CWD={{ cwd | shellquote }}
 MODEL={{ model | shellquote }}
 AGENT={{ agent | shellquote }}
-BRANCH={{ branch | shellquote }}
-PR_TITLE={{ pr_title | shellquote }}
 
+# Write lock file with PID for stall detection
 echo "PID=$$" > "$TASK_DIR/.lock"
-cleanup() { rm -f "$TASK_DIR/.lock"; }
-trap cleanup EXIT TERM INT
 
-# Detect serve vs local mode (same pattern as single-file-fix)
 if [ -n "${OPENCODE_SERVER_URL:-}" ]; then
   ATTACH_ARGS=(--attach "$OPENCODE_SERVER_URL" --password "$OPENCODE_SERVER_PASSWORD")
 else
@@ -31,43 +27,6 @@ export OPENCODE_DISABLE_AUTOUPDATE=true
 echo "[dispatch-opencode] task_id=$TASK_ID generated=$GENERATED_AT"
 echo "[dispatch-opencode] cwd=$CWD"
 echo "[dispatch-opencode] model=$MODEL agent=$AGENT"
-echo "[dispatch-opencode] branch=$BRANCH pr_title=$PR_TITLE"
-
-# Push branch to remote (ensure it exists for PR creation)
-PR_URL=""
-if git push origin "HEAD:$BRANCH" 2>"$TASK_DIR/git-push-errors.log"; then
-  # Create draft PR with the prompt as the body
-  if command -v gh &>/dev/null; then
-    PR_URL=$(gh pr create --draft --title "$PR_TITLE" --body-file "$TASK_DIR/prompt.md" 2>/dev/null) || {
-      echo "[dispatch-opencode] warn: gh pr create failed (continue without PR)" >&2
-      PR_URL=""
-    }
-    echo "[dispatch-opencode] pr_url=$PR_URL"
-  else
-    echo "[dispatch-opencode] warn: gh not on PATH; skipping PR creation" >&2
-  fi
-else
-  echo "[dispatch-opencode] warn: git push failed (branch may already exist upstream); skipping PR creation" >&2
-fi
-export PR_URL
-
-# Chronicle contract — subagent must use PR for checkpoints
-CHRONICLE_INSTRUCTIONS=$(cat <<'CHRONICLE'
-You are working in a PR-tracked worktree. The draft PR URL is PR_URL_PLACEHOLDER.
-
-Chronicle rules:
-1. Commit and push your changes regularly — each commit is a checkpoint.
-2. After each significant checkpoint, add a PR comment via the forge CLI
-   summarizing what was done and why.
-3. When done, ensure all tests pass and signal completion.
-4. Do NOT remove the lockfile or final output — the orchestrator handles
-   that after you exit.
-CHRONICLE
-)
-CHRONICLE_INSTRUCTIONS="${CHRONICLE_INSTRUCTIONS/PR_URL_PLACEHOLDER/$PR_URL}"
-echo "" >> "$TASK_DIR/prompt.md"
-echo "---" >> "$TASK_DIR/prompt.md"
-echo "$CHRONICLE_INSTRUCTIONS" >> "$TASK_DIR/prompt.md"
 
 TIMEOUT_BIN="$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || true)"
 if [ -n "$TIMEOUT_BIN" ]; then
@@ -100,9 +59,6 @@ exit_code: $EXIT
 session_id: ${SESSION_ID:-unknown}
 model: $MODEL
 agent: $AGENT
-branch: $BRANCH
-pr_title: $PR_TITLE
-pr_url: ${PR_URL:-none}
 OUT
 
 echo "" >> "$TASK_DIR/FINAL_OUTPUT.md"

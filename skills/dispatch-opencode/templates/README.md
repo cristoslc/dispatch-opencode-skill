@@ -12,6 +12,7 @@ dispatch kind:
 | File | Kind | Use |
 |------|------|-----|
 | `single-file-fix.sh.j2` | `single-file-fix` | Focused edit on one target file. |
+| `multi-file-fix.sh.j2` | `multi-file-fix` | Full-directory fix/refactor, no single-file target. |
 | `headless-spike.sh.j2` | `headless-spike` | Read-only investigation, writes report file. |
 | `pr-work.sh.j2` | `pr-work` | Create draft PR, dispatch agent into worktree with PR as chronicle. |
 
