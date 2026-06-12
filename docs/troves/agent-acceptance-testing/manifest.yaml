@@ -1,0 +1,72 @@
+id: agent-acceptance-testing
+created: 2026-06-12
+tags:
+  - agent-testing
+  - acceptance-testing
+  - llm-evaluation
+  - compliance-measurement
+  - tool-invocation
+  - dispatch-opencode
+  - promptfoo
+  - structural-testing
+  - golden-traces
+  - deterministic-assertions
+freshness-ttl: 90
+
+sources:
+  - id: promptfoo-deterministic-assertions
+    title: "Deterministic Metrics for LLM Output Validation"
+    url: https://www.promptfoo.dev/docs/configuration/expected-outputs/deterministic/
+    type: web
+    fetched: 2026-06-12
+    hash: b39d85554038a6177e74d0d4e2b6d2e9f1c75cf13a3470ab5b3d96706c8b49d0
+    notes: "Comprehensive taxonomy of deterministic assertion types including skill-used, trajectory, tool-call-f1, and custom JS/Python assertions."
+
+  - id: promptfoo-coding-agent-eval
+    title: "Evaluate Coding Agents"
+    url: https://www.promptfoo.dev/docs/guides/evaluate-coding-agents/
+    type: web
+    fetched: 2026-06-12
+    hash: 9909b0f4149d99b8091dd0f1f8bd3cdbe24dca5e02b2ead8dbbaadb730c80b43
+    notes: "Guide for testing coding agents with disposable workspaces, tracing assertions, cost/latency thresholds, and non-determinism handling."
+
+  - id: promptfoo-skill-eval
+    title: "Test Agent Skills"
+    url: https://www.promptfoo.dev/docs/guides/test-agent-skills/
+    type: web
+    fetched: 2026-06-12
+    hash: 0c42c8a9a67eac0105d10c9d9919e6c2d2f206ac33243cb8ddef25da2b782c64
+    notes: "Directly addresses testing whether agents invoke named skills correctly. skill-used assertion, layered assertion pattern."
+
+  - id: structural-testing-llm-agents
+    title: "Automated structural testing of LLM-based agents: methods, framework, and case studies"
+    url: https://arxiv.org/html/2601.18827v1
+    type: paper
+    fetched: 2026-06-12
+    hash: 9d5f41c9a9beeb70f8270ffb7bea60b63d435c03a92b85128a95f20c48ca7c2c
+    notes: "Formalizes structural testing for LLM agents — unit/integration/acceptance pyramid, CSP-based plan verification, harness variance, OpenTelemetry trace assertions."
+
+  - id: golden-traces-ci
+    title: "End Vibe-Driven Development: Testing AI Agents in CI Pipelines (Promptfoo + Golden Traces)"
+    url: https://medium.com/@meryemmsakinn/end-vibe-driven-development-testing-ai-agents-in-ci-pipelines-promptfoo-golden-traces-b9b222b23d72
+    type: web
+    fetched: 2026-06-12
+    hash: c700554e7130a2825133216723bbec6df225537d7c4ffc5bd789a15b10ae613a
+    notes: "Golden Trace pattern for CI determinism, ToolReplay proxy for record/replay, policy+schema+budgets as merge blockers."
+
+  - id: amazon-agent-eval
+    title: "Evaluating AI agents: Real-world lessons from building agentic systems at Amazon"
+    url: https://aws.amazon.com/blogs/machine-learning/evaluating-ai-agents-real-world-lessons-from-building-agentic-systems-at-amazon/
+    type: web
+    fetched: 2026-06-12
+    hash: 1ee18cf7d797fb4c435ee9bb4a99555f158bc315f59583bc273733651935c84c
+    notes: "Tool schema standardization, golden datasets for regression testing, evaluation workflow types (end-to-end, trajectory, component)."
+
+referenced-by:
+  - docs/musings/agent-acceptance-test-plan-type.md
+
+history:
+  - event: created
+    date: 2026-06-12
+    commit: "--"
+    sources: 6
