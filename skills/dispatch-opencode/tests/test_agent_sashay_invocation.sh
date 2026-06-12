@@ -3,15 +3,20 @@
 # invocability from a sashay-style calling agent.
 #
 # This test spawns a real opencode session as the "calling agent" and gives it
-# a scenario that mirrors what a sashay orchestrator would do: write a plan YAML
-# and invoke run-plan.sh to dispatch a pr-work subagent.
+# a task-level prompt with sashay context (branch and PR already exist). The
+# agent must discover the correct dispatch mechanism from the globally-installed
+# skill — no SKILL.md concatenation, no step-by-step instructions.
 #
-# It measures COMPLIANCE: does the agent correctly invoke the skill when
-# following the sashay guidance? Non-deterministic by nature — run N times
-# and measure pass rate.
+# It measures COMPLIANCE: does the agent correctly invoke dispatch-opencode's
+# pr-work kind when given sashay context? Non-deterministic by nature — run
+# N times and measure pass rate.
+#
+# The sashay context (branch, draft PR) is set up before the agent runs,
+# mirroring what a real orchestrator would have already done. The agent's job
+# is to dispatch the subagent portion.
 #
 # Checklist (each scored per run):
-#   C1: Plan YAML file created at the expected path
+#   C1: Plan YAML file created (snapshot before cleanup)
 #   C2: Plan YAML has kind: pr-work
 #   C3: Plan YAML has worktree field
 #   C4: Plan YAML has prompt field pointing to an existing file
@@ -35,8 +40,6 @@ SKILL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 RUN_PLAN="$SKILL_DIR/scripts/run-plan.sh"
 CLEANUP="$SKILL_DIR/scripts/subagent-cleanup.sh"
 ABANDON="$SKILL_DIR/scripts/subagent-abandon.sh"
-SKILL_MD="$SKILL_DIR/SKILL.md"
-EXAMPLES_MD="$SKILL_DIR/references/examples.md"
 
 N=1
 KEEP=0
@@ -100,6 +103,13 @@ run_once() {
   git add -A && git commit -q -m "fixture: initial commit"
   git push -q origin main
 
+  # ── Sashay context: orchestrator has created branch + draft PR ──
+  SASHAY_BRANCH="fix-add-sashay"
+  SASHAY_PR_URL="https://github.com/test/repo/pull/42"
+  git checkout -q -b "$SASHAY_BRANCH"
+  git push -q origin "$SASHAY_BRANCH" 2>/dev/null || true
+  git checkout -q main
+
   # ── gh shim ──
   cat > "$WORK/shim/gh" <<'SHIM'
 #!/usr/bin/env bash
@@ -112,26 +122,24 @@ SHIM
   chmod +x "$WORK/shim/gh"
   export PATH="$WORK/shim:$PATH"
 
-  # ── Prompt: task-level description, no skill invocation hints ──
-  # This mimics what a sashay orchestrator would tell the calling agent.
-  # The agent gets the *goal* (fix a bug via a PR-tracked subagent handoff)
-  # and must discover the correct dispatch mechanism from the skill docs.
-  # We include SKILL.md and examples as available context — the agent
-  # must read them and figure out the invocation on its own.
+  # ── Prompt: task-level description with sashay context ──
+  # The orchestrator has started a sashay — branch and PR exist.
+  # The agent must discover the correct dispatch mechanism from the skill.
 
   cat > "$WORK/calling-agent-prompt.md" <<PROMPT
 Fix the bug in src/foo.py: the add() function returns a - b instead of a + b.
 
-Use a sashay for this fix. Do NOT edit the source file yourself — you are the
-orchestrator. Set up the dispatch and let the subagent do the implementation.
+A sashay has been started for this fix:
+- Branch: ${SASHAY_BRANCH}
+- Draft PR: ${SASHAY_PR_URL}
 
-Skill documentation is available below. Consult it to find the right mechanism
-for this kind of workflow.
+You're continuing the sashay from the orchestrator role. The branch and draft PR
+already exist. Your job is to dispatch a subagent into the worktree to do the
+actual implementation.
+
+Do NOT edit the source file yourself. You are the orchestrator.
 
 PROMPT
-  cat "$SKILL_MD" >> "$WORK/calling-agent-prompt.md"
-  printf '\n\nHere are examples:\n\n' >> "$WORK/calling-agent-prompt.md"
-  cat "$EXAMPLES_MD" >> "$WORK/calling-agent-prompt.md"
 
   # ── Artifact watcher: snapshot files before agent cleanup ──
   # The calling agent may delete plan.yaml and other artifacts after use.
@@ -145,16 +153,17 @@ PROMPT
     for f in "$WORK"/prompts/*.md "$WORK"/prompt-*.md; do
       [ -f "$f" ] && [ ! -f "$SNAP/$(basename "$f")" ] && cp "$f" "$SNAP/" 2>/dev/null || true
     done
-    # Snapshot .subagents task dirs
+    # Snapshot .subagents task dirs (all files, not just prompt and start script)
     for d in "$WORK"/.subagents/*/; do
       [ -d "$d" ] || continue
       tid=$(basename "$d")
-      [ -d "$SNAP/$tid" ] && continue
-      mkdir -p "$SNAP/$tid"
+      [ "$tid" = "plan-"* ] && continue
+      [ -d "$SNAP/$tid" ] || mkdir -p "$SNAP/$tid"
       cp "$d"prompt.md "$SNAP/$tid/" 2>/dev/null || true
       cp "$d"start-subagent.sh "$SNAP/$tid/" 2>/dev/null || true
+      cp "$d"FINAL_OUTPUT.md "$SNAP/$tid/" 2>/dev/null || true
     done
-    sleep 1
+    sleep 0.2
   done &
   WATCHER_PID=$!
 
@@ -203,10 +212,11 @@ PROMPT
   for d in "$WORK"/.subagents/*/; do
     [ -d "$d" ] || continue
     tid=$(basename "$d")
-    [ -d "$SNAP/$tid" ] && continue
-    mkdir -p "$SNAP/$tid"
+    [ "$tid" = "plan-"* ] && continue
+    [ -d "$SNAP/$tid" ] || mkdir -p "$SNAP/$tid"
     cp "$d"prompt.md "$SNAP/$tid/" 2>/dev/null || true
     cp "$d"start-subagent.sh "$SNAP/$tid/" 2>/dev/null || true
+    cp "$d"FINAL_OUTPUT.md "$SNAP/$tid/" 2>/dev/null || true
   done
 
   echo "  Agent session complete. Checking artifacts..."

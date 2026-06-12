@@ -180,11 +180,15 @@ And the prompt file would be:
 ```markdown
 Fix the bug in src/foo.py: the add() function returns a - b instead of a + b.
 
-Use a sashay for this fix. Do NOT edit the source file yourself — you are the
-orchestrator. Set up the dispatch and let the subagent do the implementation.
+A sashay has been started for this fix:
+- Branch: fix-add-sashay
+- Draft PR: https://github.com/test/repo/pull/42
 
-Skill documentation is available below. Consult it to find the right mechanism
-for this kind of workflow.
+You're continuing the sashay from the orchestrator role. The branch and draft PR
+already exist. Your job is to dispatch a subagent into the worktree to do the
+actual implementation.
+
+Do NOT edit the source file yourself. You are the orchestrator.
 ```
 
 The `{run_plan_path}`, `{task_id}`, and `{worktree}` placeholders are
