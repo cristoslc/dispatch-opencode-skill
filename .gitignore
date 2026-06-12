@@ -12,7 +12,7 @@ node_modules/
 /bin/
 
 # Vendored skills are tracked by skills-lock.json, not committed.
-.claude/skills/
+.claude/
 .crush/skills/
 .goose/skills/
 .agents/skills/
