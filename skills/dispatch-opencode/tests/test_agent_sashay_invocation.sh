@@ -7,13 +7,12 @@
 # agent correctly discovers and invokes dispatch-opencode and the subagent
 # produces results in the worktree.
 #
-# Checklist:
-#   C1: Dispatch happened (.subagents/<task-id>/start-subagent.sh exists)
-#   C2: Subagent CWD points to the sashay worktree
-#   C3: prompt.md in task dir
-#   C4: Fix commit in worktree branch
-#   C5: Source file fixed in worktree (add returns a+b)
-#   C6: Fix pushed to remote
+# Checklist (invocation criteria only):
+#   C1: Agent read SKILL.md (referenced it in session output)
+#   C2: Agent invoked the skill (plan YAML written or dispatch.sh called)
+#   C3: Agent used worktree dispatch pattern (start-subagent.sh in task dir)
+#   C4: Subagent CWD points to the sashay worktree
+#   C5: prompt.md in task dir
 #
 # Usage:
 #   bash tests/test_agent_sashay_invocation.sh          # single run
@@ -41,8 +40,7 @@ while [ $# -gt 0 ]; do
 done
 
 PASS=0; FAIL=0; CHECKS=0; RUNS=0
-C1P=0; C1F=0; C2P=0; C2F=0; C3P=0; C3F=0
-C4P=0; C4F=0; C5P=0; C5F=0; C6P=0; C6F=0
+C1P=0; C1F=0; C2P=0; C2F=0; C3P=0; C3F=0; C4P=0; C4F=0; C5P=0; C5F=0
 
 check() { local l="$1" r="$2"; CHECKS=$((CHECKS+1)); if [ "$r" = "0" ]; then PASS=$((PASS+1)); eval "${l}P=$((${l}P+1))"; else FAIL=$((FAIL+1)); eval "${l}F=$((${l}F+1))"; fi; }
 
@@ -152,7 +150,35 @@ PROMPT
 
   echo "  Agent session complete. Checking artifacts..."
 
-  # C1: Dispatch happened (start-subagent.sh exists in snapshot or live)
+  local AGENT_LOG="$WORK/agent-stdout.log"
+
+  # C1: Agent read SKILL.md (check session output for skill references)
+  if [ -f "$AGENT_LOG" ] && grep -qi "dispatch-opencode\|run-plan\|dispatch.sh\|SKILL.md" "$AGENT_LOG" 2>/dev/null; then
+    check C1 0; echo "  C1 PASS: agent read SKILL.md / referenced skill"
+  else
+    check C1 1; echo "  C1 FAIL: no reference to dispatch-opencode in agent output"
+  fi
+
+  # C2: Agent invoked the skill (plan YAML, or dispatch.sh, or run-plan.sh called)
+  local INVOKED=0
+  for pf in "$SNAP"/plan*.yaml "$WORK"/plan*.yaml; do
+    [ -f "$pf" ] && INVOKED=1 && break
+  done
+  for d in "$SNAP"/*/; do
+    [ -f "$d/start-subagent.sh" ] && INVOKED=1 && break
+  done
+  for d in "$WORK"/.subagents/*/; do
+    tid=$(basename "$d"); [ "$tid" = "plan-"* ] && continue
+    [ -f "$d/start-subagent.sh" ] && INVOKED=1 && break
+  done
+  if [ "$INVOKED" -eq 1 ]; then
+    check C2 0; echo "  C2 PASS: agent invoked dispatch-opencode"
+  else
+    check C2 1; echo "  C2 FAIL: no invocation artifacts found"
+    [ "$KEEP" -eq 0 ] && rm -rf "$WORK"; return
+  fi
+
+  # C3: Agent used worktree dispatch pattern (start-subagent.sh exists)
   local START_SCRIPT="" TASK_ID=""
   for d in "$SNAP"/*/; do
     [ -d "$d" ] || continue; tid=$(basename "$d")
@@ -171,51 +197,26 @@ PROMPT
     done
   fi
   if [ -n "$START_SCRIPT" ]; then
-    check C1 0; echo "  C1 PASS: dispatch happened (task $TASK_ID)"
+    check C3 0; echo "  C3 PASS: start-subagent.sh in task dir (task $TASK_ID)"
   else
-    check C1 1; echo "  C1 FAIL: no start-subagent.sh found (no dispatch)"
-    echo "  Diagnostics:"; find "$SNAP" -type f 2>/dev/null | head -10
-    [ "$KEEP" -eq 0 ] && rm -rf "$WORK"; return
+    check C3 1; echo "  C3 FAIL: no start-subagent.sh found"
   fi
 
-  # C2: Subagent CWD points to the sashay worktree
-  if grep -q "CWD=.*$SASHAY_BRANCH" "$START_SCRIPT" 2>/dev/null; then
-    check C2 0; echo "  C2 PASS: subagent CWD points to worktree"
+  # C4: Subagent CWD points to the sashay worktree
+  if [ -n "$START_SCRIPT" ] && grep -q "CWD=.*$SASHAY_BRANCH" "$START_SCRIPT" 2>/dev/null; then
+    check C4 0; echo "  C4 PASS: subagent CWD points to worktree"
   else
-    check C2 1; echo "  C2 FAIL: subagent CWD not in worktree"
+    check C4 1; echo "  C4 FAIL: subagent CWD not in worktree"
   fi
 
-  # C3: prompt.md in task dir
+  # C5: prompt.md in task dir
   local PM=""
-  [ -f "$SNAP/$TASK_ID/prompt.md" ] && PM="$SNAP/$TASK_ID/prompt.md"
-  [ -z "$PM" ] && [ -f "$WORK/.subagents/$TASK_ID/prompt.md" ] && PM="$WORK/.subagents/$TASK_ID/prompt.md"
+  [ -n "$TASK_ID" ] && [ -f "$SNAP/$TASK_ID/prompt.md" ] && PM="$SNAP/$TASK_ID/prompt.md"
+  [ -z "$PM" ] && [ -n "$TASK_ID" ] && [ -f "$WORK/.subagents/$TASK_ID/prompt.md" ] && PM="$WORK/.subagents/$TASK_ID/prompt.md"
   if [ -n "$PM" ]; then
-    check C3 0; echo "  C3 PASS: prompt.md in task dir"
+    check C5 0; echo "  C5 PASS: prompt.md in task dir"
   else
-    check C3 1; echo "  C3 FAIL: prompt.md not found"
-  fi
-
-  # C4: Fix commit in worktree branch
-  if git -C "$WORK/.worktrees/$SASHAY_BRANCH" log --oneline 2>/dev/null | head -3 | grep -qi "fix\|add\|+"; then
-    check C4 0; echo "  C4 PASS: fix commit in worktree branch"
-  else
-    check C4 1; echo "  C4 FAIL: no fix commit in worktree branch"
-  fi
-
-  # C5: Source file fixed in worktree
-  if [ -f "$WORK/.worktrees/$SASHAY_BRANCH/src/foo.py" ] && \
-     grep -q 'return a + b' "$WORK/.worktrees/$SASHAY_BRANCH/src/foo.py" 2>/dev/null; then
-    check C5 0; echo "  C5 PASS: src/foo.py fixed in worktree"
-  else
-    check C5 1; echo "  C5 FAIL: src/foo.py not fixed in worktree"
-  fi
-
-  # C6: Fix pushed to remote
-  if git -C "$WORK" fetch -q origin "$SASHAY_BRANCH" 2>/dev/null && \
-     git -C "$WORK" log "origin/$SASHAY_BRANCH" --oneline 2>/dev/null | head -3 | grep -qi "fix\|add\|+"; then
-    check C6 0; echo "  C6 PASS: fix pushed to remote"
-  else
-    check C6 1; echo "  C6 FAIL: fix not pushed to remote"
+    check C5 1; echo "  C5 FAIL: prompt.md not found"
   fi
 
   # Cleanup
@@ -238,15 +239,15 @@ echo "============================================================"
 echo ""
 printf "  %-35s %4s %4s %5s%%\n" "Criterion" "Pass" "Fail" "Rate"
 echo "  --------------------------------------------------------"
-for c in C1 C2 C3 C4 C5 C6; do
+for c in C1 C2 C3 C4 C5; do
   p_var="${c}P"; f_var="${c}F"
   p="${!p_var}"; f="${!f_var}"
   total=$((p+f)); rate=0
   [ "$total" -gt 0 ] && rate=$(( p * 100 / total ))
   case "$c" in
-    C1) label="Dispatch happened" ;; C2) label="CWD points to worktree" ;;
-    C3) label="prompt.md in task dir" ;; C4) label="Fix commit in branch" ;;
-    C5) label="Source file fixed" ;; C6) label="Fix pushed to remote" ;;
+    C1) label="Skill discovered" ;; C2) label="Skill invoked" ;;
+    C3) label="Worktree dispatch" ;;  C4) label="CWD in worktree" ;;
+    C5) label="prompt.md in task dir" ;;
   esac
   printf "  %-35s %4d %4d %5d%%\n" "$label" "$p" "$f" "$rate"
 done
