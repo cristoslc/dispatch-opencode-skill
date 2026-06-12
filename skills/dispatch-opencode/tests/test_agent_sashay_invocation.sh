@@ -90,9 +90,7 @@ A sashay has been started for this fix:
 - Worktree: .worktrees/${SASHAY_BRANCH}
 
 Continue the sashay. The branch, worktree, and draft PR already exist.
-Dispatch a subagent into the worktree to fix the bug. The dispatch-opencode
-skill is available in .opencode/skills/dispatch-opencode/ — read its SKILL.md
-and use it.
+Dispatch a subagent into the worktree to fix the bug.
 
 Do NOT edit any source files yourself.
 PROMPT
