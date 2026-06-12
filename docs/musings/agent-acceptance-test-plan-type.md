@@ -178,21 +178,13 @@ tasks:
 And the prompt file would be:
 
 ```markdown
-You are a calling agent performing a PR sashay. Your job is to dispatch a
-subagent to fix a bug in src/foo.py using the dispatch-opencode skill.
+Fix the bug in src/foo.py: the add() function returns a - b instead of a + b.
 
-The bug: the add() function in src/foo.py returns a - b instead of a + b.
+Use a sashay for this fix. Do NOT edit the source file yourself — you are the
+orchestrator. Set up the dispatch and let the subagent do the implementation.
 
-Follow these steps exactly:
-1. Write a prompt file at prompts/fix-add.md describing the bug fix.
-2. Write a plan YAML file at plan.yaml with kind: pr-work for this task.
-   Use model ollama-cloud/deepseek-v4-flash:cloud, agent: build,
-   worktree: fix-add-branch, and pr_title: "Fix: correct add function".
-3. Invoke run-plan.sh:
-   bash {run_plan_path} --plan plan.yaml
-
-Do NOT edit the source file yourself. Do NOT run opencode run directly.
-You MUST use the plan YAML + run-plan.sh workflow.
+Skill documentation is available below. Consult it to find the right mechanism
+for this kind of workflow.
 ```
 
 The `{run_plan_path}`, `{task_id}`, and `{worktree}` placeholders are
