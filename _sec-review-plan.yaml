@@ -1,0 +1,7 @@
+tasks:
+  - id: security-review
+    kind: headless-spike
+    model: ollama-cloud/deepseek-v4-flash:cloud
+    agent: explore
+    prompt: _sec-review-prompt.md
+    target: _sec-review-result.json

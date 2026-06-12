@@ -1,0 +1,42 @@
+tasks:
+  - id: codereview-security
+    kind: headless-spike
+    model: ollama-cloud/deepseek-v4-flash:cloud
+    agent: explore
+    prompt: codereview-security.md
+    target: /tmp/codereview_security_v3_result.json
+
+  - id: codereview-style
+    kind: headless-spike
+    model: ollama-cloud/deepseek-v4-flash:cloud
+    agent: explore
+    prompt: codereview-style.md
+    target: /tmp/codereview_style_v3_result.json
+
+  - id: codereview-logic
+    kind: headless-spike
+    model: ollama-cloud/deepseek-v4-flash:cloud
+    agent: explore
+    prompt: codereview-logic.md
+    target: /tmp/codereview_logic_v3_result.json
+
+  - id: codereview-docs
+    kind: headless-spike
+    model: ollama-cloud/deepseek-v4-flash:cloud
+    agent: explore
+    prompt: codereview-docs.md
+    target: /tmp/codereview_docs_v3_result.json
+
+  - id: codereview-memory
+    kind: headless-spike
+    model: ollama-cloud/deepseek-v4-flash:cloud
+    agent: explore
+    prompt: codereview-memory.md
+    target: /tmp/codereview_memory_v3_result.json
+
+  - id: codereview-conformance
+    kind: headless-spike
+    model: ollama-cloud/deepseek-v4-flash:cloud
+    agent: explore
+    prompt: codereview-conformance.md
+    target: /tmp/codereview_project-memory-conformance_v3_result.json
