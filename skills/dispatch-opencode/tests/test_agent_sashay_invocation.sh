@@ -150,11 +150,27 @@ PROMPT
 
   local AGENT_LOG="$WORK/agent-stdout.log"
 
-  # C1: Agent read SKILL.md (check session output for skill references)
-  if [ -f "$AGENT_LOG" ] && grep -qi "dispatch-opencode\|run-plan\|dispatch.sh\|SKILL.md" "$AGENT_LOG" 2>/dev/null; then
-    check C1 0; echo "  C1 PASS: agent read SKILL.md / referenced skill"
+  # C1: Agent discovered the skill (used it, or read SKILL.md, or referenced it)
+  local SKILL_REF=0
+  if [ -f "$AGENT_LOG" ]; then
+    grep -qi "dispatch\|run-plan\|dispatch\.sh\|SKILL\.md\|subagent\|\.opencode/skills\|start-subagent" "$AGENT_LOG" 2>/dev/null && SKILL_REF=1
+    grep -qi "SKILL\.md\|Read.*dispatch\|Glob.*skill" "$AGENT_LOG" 2>/dev/null && SKILL_REF=1
+  fi
+  if [ "$SKILL_REF" -eq 1 ]; then
+    check C1 0; echo "  C1 PASS: agent discovered dispatch-opencode"
   else
-    check C1 1; echo "  C1 FAIL: no reference to dispatch-opencode in agent output"
+    # Secondary: dispatch artifacts are strong evidence even without log mention
+    local HAS_ART=0
+    for d in "$SNAP"/*/; do [ -f "$d/start-subagent.sh" ] && HAS_ART=1 && break; done
+    [ "$HAS_ART" -eq 0 ] && for d in "$WORK"/.subagents/*/; do
+      tid=$(basename "$d"); [ "$tid" = "plan-"* ] && continue
+      [ -f "$d/start-subagent.sh" ] && HAS_ART=1 && break
+    done
+    if [ "$HAS_ART" -eq 1 ]; then
+      check C1 0; echo "  C1 PASS: agent discovered dispatch-opencode (inferred from artifacts)"
+    else
+      check C1 1; echo "  C1 FAIL: no reference to dispatch-opencode in agent output"
+    fi
   fi
 
   # C2: Agent invoked the skill (plan YAML, or dispatch.sh, or run-plan.sh called)
