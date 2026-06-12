@@ -104,7 +104,10 @@ SUBAGENTS_DIR="$ROOT/.subagents"
 TASK_DIR="$SUBAGENTS_DIR/$TASK_ID"
 mkdir -p "$TASK_DIR"
 
-# Copy prompt
+# Copy prompt (guard against source == destination)
+if [ "$(cd "$(dirname "$PROMPT_FILE")" && pwd)/$(basename "$PROMPT_FILE")" = "$TASK_DIR/prompt.md" ]; then
+  err "prompt file $PROMPT_FILE resolves to the same path as $TASK_DIR/prompt.md — place prompts outside .subagents/"
+fi
 cp "$PROMPT_FILE" "$TASK_DIR/prompt.md"
 
 # Prepare worktree if declared

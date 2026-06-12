@@ -17,6 +17,9 @@ metadata:
   version: "2.0.0"
   status: active
   author: cristoslc
+  spokes:
+    - path: references/troubleshooting.md
+      trigger: session not found, blank FINAL_OUTPUT.md, dispatch skipped, timeout, stuck, exit code 3, exit code 2, branch not found, orphaned symlink, worktree symlink, prompt file resolves
 ---
 
 # dispatch-opencode
@@ -77,7 +80,7 @@ For previous versions of this skill (ACP/CLI/HTTP), see ADR-001.
 3. Parse JSON output for lockfile path and PID.
 4. Call `poll-subagent.sh --task-id <id> --root <path>`. It logs
    event line count each iteration, detects stuck tasks (exit 2),
-   and times out (exit 3). Or poll manually with the same checks.
+   and times out (exit 3).
 5. On completion (exit 0): read `FINAL_OUTPUT.md`, merge work, call
    `subagent-cleanup.sh`.
 6. On failure or stuck (exit 2/3): call `subagent-abandon.sh`.
@@ -90,7 +93,7 @@ For previous versions of this skill (ACP/CLI/HTTP), see ADR-001.
 3. Parse JSON output for N lockfile paths and PIDs.
 4. For each dispatched task, call `poll-subagent.sh --task-id <id>
    --root <path>`. It logs event line count per iteration, detects
-   stuck tasks, and times out. Or poll manually with the same checks.
+   stuck tasks, and times out.
 5. Per completed task: read `FINAL_OUTPUT.md`, merge work, call
    `subagent-cleanup.sh`.
 6. Per failed or stuck task: call `subagent-abandon.sh`.
@@ -147,6 +150,11 @@ Fields: `id` (required), `kind` (required), `model` (required),
 `prompt` (required, path to prompt file), `target` (required for
 single-file-fix, path inside cwd; not used for multi-file-fix),
 `worktree` (optional, branch name), `agent` (optional, defaults per kind).
+
+Store prompt files in `prompts/<task-id>.md` at the project root.
+For example, a plan referencing `prompt: prompts/fix-auth.md` has the
+prompt file at `<project>/prompts/fix-auth.md` and the task directory
+at `<project>/.subagents/fix-auth/`.
 
 No `depends` field. The agent writes only tasks that are ready to run
 right now.
@@ -287,3 +295,117 @@ Add a kind by:
 - Trove: `opencode-runtime-integration@d9bad44` — failure-mode catalogue.
 - SPIKE-001: `--attach` session visibility on serve daemon.
 - Examples: `references/examples.md`.
+
+## opencode CLI syntax reference
+
+Commands and flags relevant to dispatch-opencode. Full docs at
+<https://opencode.ai/docs/cli/>.
+
+### Global flags
+
+| Flag | Description |
+|------|-------------|
+| `--help` / `-h` | Display help |
+| `--version` / `-v` | Print version number |
+| `--print-logs` | Print logs to stderr |
+| `--log-level` | DEBUG, INFO, WARN, ERROR |
+| `--pure` | Run without external plugins |
+
+### `opencode run`
+
+Non-interactive prompt execution — the core invocation for subagent
+dispatch. Pass a prompt via stdin or as arguments.
+
+```
+opencode run [message..]
+```
+
+```
+opencode run < prompt.md
+```
+
+#### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--model` / `-m` | `provider/model` — e.g. `ollama-cloud/deepseek-v4-flash:cloud` |
+| `--agent` | Agent to use: `build` (default), `explore` (read-only), or a custom agent |
+| `--attach` | Attach to a running server — e.g. `--attach http://localhost:4096` |
+| `--password` / `-p` | Basic auth password (defaults to `OPENCODE_SERVER_PASSWORD`) |
+| `--username` / `-u` | Basic auth username (defaults to `OPENCODE_SERVER_USERNAME` or `opencode`) |
+| `--dir` | Working directory (or path on remote server when attaching) |
+| `--file` / `-f` | Attach file(s) to the prompt |
+| `--format` | `default` (formatted) or `json` (raw JSON events) |
+| `--thinking` | Show thinking blocks |
+| `--continue` / `-c` | Continue the last session |
+| `--session` / `-s` | Resume a specific session by ID |
+| `--fork` | Fork session when continuing (use with `--continue` or `--session`) |
+| `--dangerously-skip-permissions` | Auto-approve permissions not explicitly denied |
+| `--title` | Title for the session |
+
+### `opencode serve`
+
+Headless HTTP server. Required for `--attach` mode. Set
+`OPENCODE_SERVER_PASSWORD` to enable basic auth.
+
+```
+opencode serve [--port <n>] [--hostname <host>] [--mdns]
+```
+
+### `opencode models`
+
+List available models from configured providers. Format:
+`provider/model`.
+
+```
+opencode models [provider]
+```
+
+`--refresh` updates the cached model list. `--verbose` includes
+cost metadata.
+
+### `opencode auth login`
+
+Authenticate with an LLM provider. Credentials stored at
+`~/.local/share/opencode/auth.json`.
+
+```
+opencode auth login [--provider <id>] [--method <label>]
+```
+
+Provider env vars (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.)
+also work without running `auth login`.
+
+### `opencode attach`
+
+Attach TUI to a running server.
+
+```
+opencode attach <url> [--dir <path>] [--continue]
+```
+
+### Relevant environment variables
+
+Dispatched subagents set these automatically (templates):
+
+| Variable | Purpose |
+|----------|---------|
+| `OPENCODE_DISABLE_AUTOCOMPACT=true` | Prevent context compaction in subagent |
+| `OPENCODE_DISABLE_AUTOUPDATE=true` | Prevent update checks in subagent |
+
+Server-attach variables (set by the operator before running
+`opencode serve`):
+
+| Variable | Purpose |
+|----------|---------|
+| `OPENCODE_SERVER_URL` | URL of the headless server for `--attach` mode |
+| `OPENCODE_SERVER_PASSWORD` | Basic auth password |
+| `OPENCODE_SERVER_USERNAME` | Basic auth username (default `opencode`) |
+
+## Troubleshooting
+
+See `references/troubleshooting.md` for detailed
+solutions to common issues. Trigger keywords: `session not found`,
+`blank FINAL_OUTPUT.md`, `dispatch skipped`, `timeout`, `stuck`,
+`exit code 3`, `exit code 2`, `branch not found`, `orphaned symlink`,
+`worktree symlink`, `prompt file resolves`.
