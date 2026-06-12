@@ -2,6 +2,8 @@
 
 Date: 2026-06-12
 
+Trove: agent-acceptance-testing@542e25f
+
 ## The problem
 
 We just wrote `test_agent_sashay_invocation.sh` — a test that spawns a real
