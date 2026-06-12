@@ -79,6 +79,7 @@ for t in tasks:
         prompt = os.path.join('$PLAN_DIR', prompt)
 
     agent = agent if agent else '-'
+    target = target if target else '-'
     worktree = worktree if worktree else '-'
     pr_title = pr_title if pr_title else '-'
     print(f'{tid}\t{kind}\t{model}\t{agent}\t{prompt}\t{target}\t{worktree}\t{pr_title}')
