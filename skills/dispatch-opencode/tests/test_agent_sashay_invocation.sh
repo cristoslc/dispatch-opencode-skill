@@ -152,7 +152,7 @@ PROMPT
 
   # C1: Agent discovered the skill — use llm to classify session transcript
   local SKILL_REF=0
-  if [ -f "$AGENT_LOG" ] && [ -s "$AGENT_LOG" ]; then
+  if [ -f "$AGENT_LOG" ] && [ -s "$AGENT_LOG" ] && [ "$(wc -l < "$AGENT_LOG")" -gt 3 ]; then
     local LLM_OUT
     LLM_OUT=$(llm -s "Answer only YES or NO. Did the agent discover and use the dispatch-opencode skill (read SKILL.md, called run-plan.sh/dispatch.sh, created start-subagent.sh/plan.yaml)?" < "$AGENT_LOG" 2>/dev/null || echo "NO")
     echo "$LLM_OUT" | grep -qi "^YES" && SKILL_REF=1
