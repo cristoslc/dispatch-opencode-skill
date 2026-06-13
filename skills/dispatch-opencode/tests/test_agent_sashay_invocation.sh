@@ -150,27 +150,25 @@ PROMPT
 
   local AGENT_LOG="$WORK/agent-stdout.log"
 
-  # C1: Agent discovered the skill (used it, or read SKILL.md, or referenced it)
+  # C1: Agent discovered the skill — use llm to classify session transcript
   local SKILL_REF=0
-  if [ -f "$AGENT_LOG" ]; then
-    grep -qi "dispatch\|run-plan\|dispatch\.sh\|SKILL\.md\|subagent\|\.opencode/skills\|start-subagent" "$AGENT_LOG" 2>/dev/null && SKILL_REF=1
-    grep -qi "SKILL\.md\|Read.*dispatch\|Glob.*skill" "$AGENT_LOG" 2>/dev/null && SKILL_REF=1
+  if [ -f "$AGENT_LOG" ] && [ -s "$AGENT_LOG" ]; then
+    local LLM_OUT
+    LLM_OUT=$(llm -s "Answer only YES or NO. Did the agent discover and use the dispatch-opencode skill (read SKILL.md, called run-plan.sh/dispatch.sh, created start-subagent.sh/plan.yaml)?" < "$AGENT_LOG" 2>/dev/null || echo "NO")
+    echo "$LLM_OUT" | grep -qi "^YES" && SKILL_REF=1
+  fi
+  # Secondary: dispatch artifacts confirm skill was used even if llm misclassifies
+  if [ "$SKILL_REF" -eq 0 ]; then
+    for d in "$SNAP"/*/ "$WORK"/.subagents/*/; do
+      [ -d "$d" ] || continue
+      tid=$(basename "$d"); [ "$tid" = "plan-"* ] && continue
+      [ -f "$d/start-subagent.sh" ] && SKILL_REF=1 && break
+    done
   fi
   if [ "$SKILL_REF" -eq 1 ]; then
     check C1 0; echo "  C1 PASS: agent discovered dispatch-opencode"
   else
-    # Secondary: dispatch artifacts are strong evidence even without log mention
-    local HAS_ART=0
-    for d in "$SNAP"/*/; do [ -f "$d/start-subagent.sh" ] && HAS_ART=1 && break; done
-    [ "$HAS_ART" -eq 0 ] && for d in "$WORK"/.subagents/*/; do
-      tid=$(basename "$d"); [ "$tid" = "plan-"* ] && continue
-      [ -f "$d/start-subagent.sh" ] && HAS_ART=1 && break
-    done
-    if [ "$HAS_ART" -eq 1 ]; then
-      check C1 0; echo "  C1 PASS: agent discovered dispatch-opencode (inferred from artifacts)"
-    else
-      check C1 1; echo "  C1 FAIL: no reference to dispatch-opencode in agent output"
-    fi
+    check C1 1; echo "  C1 FAIL: agent did not discover dispatch-opencode"
   fi
 
   # C2: Agent invoked the skill (plan YAML, or dispatch.sh, or run-plan.sh called)
