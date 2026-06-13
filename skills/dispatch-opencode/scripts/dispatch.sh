@@ -13,8 +13,7 @@
 #     --prompt-file <path> [--target <path>] --task-id <id> \
 #     [--worktree <branch>] [--pr-title <title>]
 #
-# Note: --target is required for single-file-fix and headless-spike
-# but NOT required for pr-work.
+# Note: --target is required for single-file-fix and headless-spike.
 #
 # Exit codes:
 #   0 — task dispatched, .lock confirmed
@@ -50,7 +49,6 @@ while [ "$#" -gt 0 ]; do
     --target)      TARGET="$2"; shift 2 ;;
     --task-id)     TASK_ID="$2"; shift 2 ;;
     --worktree)    WORKTREE_BRANCH="$2"; shift 2 ;;
-    --pr-title)    PR_TITLE="$2"; shift 2 ;;
     *)             err "unknown flag: $1" ;;
   esac
 done
@@ -62,23 +60,15 @@ done
 : "${AGENT:=default}"
 [ "$AGENT" != "-" ]  || AGENT="default"
 [ -n "$PROMPT_FILE" ] || err "--prompt-file is required"
-# pr-work kind doesn't require --target (works on whole worktree)
-if [ "$KIND" != "pr-work" ] && [ "$KIND" != "multi-file-fix" ]; then
+
+if [ "$KIND" != "multi-file-fix" ]; then
   [ -n "$TARGET" ] || err "--target is required"
 fi
 
-# pr-work kind requires --worktree
-if [ "$KIND" = "pr-work" ]; then
-  [ -n "$WORKTREE_BRANCH" ] || err "pr-work kind requires --worktree"
+# Validate worktree branch if provided
+if [ -n "$WORKTREE_BRANCH" ]; then
   case "$WORKTREE_BRANCH" in
     *[!A-Za-z0-9_.-]*|"") err "unsafe worktree branch: '$WORKTREE_BRANCH'" ;;
-  esac
-fi
-
-# Validate pr_title if provided (reject control characters)
-if [ -n "$PR_TITLE" ]; then
-  case "$PR_TITLE" in
-    *[![:print:]]*) err "pr_title contains non-printable characters: '$PR_TITLE'" ;;
   esac
 fi
 [ -n "$TASK_ID" ]     || err "--task-id is required"
@@ -114,11 +104,19 @@ cp "$PROMPT_FILE" "$TASK_DIR/prompt.md"
 WORKTREE_DIR=""
 if [ -n "$WORKTREE_BRANCH" ]; then
   WORKTREE_DIR="$TASK_DIR/worktree"
-  git worktree add -b "$WORKTREE_BRANCH" "$WORKTREE_DIR" HEAD >/dev/null 2>&1 \
-    || err "worktree creation failed for task=$TASK_ID branch=$WORKTREE_BRANCH"
-  # Create symlink in .worktrees/
-  mkdir -p "$ROOT/.worktrees"
-  ln -sf "$WORKTREE_DIR" "$ROOT/.worktrees/$TASK_ID"
+  # Check for an existing worktree on this branch first
+  EXISTING_WT=$(git worktree list 2>/dev/null | awk -v b="$WORKTREE_BRANCH" '$3 == b || $3 == "refs/heads/"b { print $1; exit }' || true)
+  if [ -n "$EXISTING_WT" ] && [ -d "$EXISTING_WT" ]; then
+    # Use existing worktree — don't create a new one
+    WORKTREE_DIR="$EXISTING_WT"
+  else
+    # Check for existing worktree symlink to prevent duplicate dispatch
+    [ -L "$ROOT/.worktrees/$TASK_ID" ] && err "worktree already exists for task=$TASK_ID"
+    git worktree add -b "$WORKTREE_BRANCH" "$WORKTREE_DIR" HEAD >/dev/null 2>&1 \
+      || err "worktree creation failed for task=$TASK_ID branch=$WORKTREE_BRANCH"
+    mkdir -p "$ROOT/.worktrees"
+    ln -sf "$WORKTREE_DIR" "$ROOT/.worktrees/$TASK_ID"
+  fi
   # CWD becomes the worktree
   CWD="$WORKTREE_DIR"
 fi
@@ -192,41 +190,6 @@ with open(os.path.join(task_dir, 'start-subagent.sh'), 'w') as f:
     f.write(tpl)
 PYEOF
     ;;
-  pr-work)
-    TPL="$TEMPLATES_DIR/pr-work.sh.j2"
-    [ -f "$TPL" ] || err "no template for kind=$KIND: $TPL"
-    PR_TITLE="${PR_TITLE:-$TASK_ID}"
-    export TPL TASK_ID TS CWD TASK_DIR MODEL AGENT WORKTREE_BRANCH PR_TITLE
-    python3 << 'PYEOF' 2>"$TASK_DIR/template-render-errors.log" || err "template rendering failed (see template-render-errors.log)"
-import os, shlex, sys
-tpl_path = os.environ['TPL']
-task_id = os.environ['TASK_ID']
-ts = os.environ['TS']
-cwd = os.environ['CWD']
-task_dir = os.environ['TASK_DIR']
-model = os.environ['MODEL']
-agent = os.environ['AGENT']
-branch = os.environ['WORKTREE_BRANCH']
-pr_title = os.environ['PR_TITLE']
-with open(tpl_path) as f:
-    tpl = f.read()
-vars = {
-    'task_id':      shlex.quote(task_id),
-    'generated_at': ts,
-    'cwd':          shlex.quote(cwd),
-    'task_dir':     shlex.quote(task_dir),
-    'model':        shlex.quote(model),
-    'agent':        shlex.quote(agent),
-    'branch':       shlex.quote(branch),
-    'pr_title':     shlex.quote(pr_title),
-}
-for k, v in vars.items():
-    tpl = tpl.replace('{{ ' + k + ' | shellquote }}', v)
-    tpl = tpl.replace('{{ ' + k + ' }}', v)
-with open(os.path.join(task_dir, 'start-subagent.sh'), 'w') as f:
-    f.write(tpl)
-PYEOF
-    ;;
   multi-file-fix)
     TPL="$TEMPLATES_DIR/multi-file-fix.sh.j2"
     [ -f "$TPL" ] || err "no template for kind=$KIND: $TPL"
@@ -257,7 +220,7 @@ with open(os.path.join(task_dir, 'start-subagent.sh'), 'w') as f:
     f.write(tpl)
 PYEOF
     ;;
-  *) err "unknown kind: $KIND (single-file-fix | multi-file-fix | headless-spike | pr-work)" ;;
+  *) err "unknown kind: $KIND (single-file-fix | multi-file-fix | headless-spike)" ;;
 esac
 
 chmod +x "$TASK_DIR/start-subagent.sh"

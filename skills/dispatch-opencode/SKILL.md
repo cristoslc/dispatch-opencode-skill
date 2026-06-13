@@ -5,11 +5,13 @@ description: >
   async .subagents/ lock-watch protocol. The agent writes a plan YAML,
   calls run-plan.sh to validate and dispatch, polls lockfiles on its own
   interval, reads FINAL_OUTPUT.md on completion, and calls
-  subagent-cleanup.sh or subagent-abandon.sh to tear down. Use when the
-  agent wants to parallelize independent tasks with per-task worktree
-  isolation and multi-model dispatch. TRIGGER when: the agent would
-  otherwise block on a subagent that could run in the background, or when
-  parallelize with per-task isolation is needed.
+  subagent-cleanup.sh or subagent-abandon.sh to tear down. Use when you
+  want to hand work off to a background subagent instead of doing it
+  yourself — for example, dispatching a subagent into a worktree,
+  parallelizing independent tasks, or running long-lived investigations.
+  TRIGGER when: the agent would otherwise block on a subagent that could
+  run in the background, or when worktree-isolated subagent dispatch is
+  needed.
 license: MIT
 compatibility: Requires opencode CLI (https://opencode.ai), git, and a running
   `opencode serve` daemon for --attach mode (optional, falls back to local).
@@ -42,6 +44,10 @@ For previous versions of this skill (ACP/CLI/HTTP), see ADR-001.
 - The operator wants to attach to a running subagent from another terminal.
 - The agent wants the dispatch artifact (prompt, event log, lock file) on
   disk for replay or audit.
+- You are the orchestrator in a sashay: the branch, worktree, and draft PR
+  already exist on the forge. Use this skill to dispatch a subagent into
+  the worktree with sashay chronicle instructions in the prompt. The
+  subagent will commit, push, and post PR comments throughout its work.
 
 ## When NOT to use
 
@@ -136,14 +142,6 @@ tasks:
     agent: build
     prompt: prompts/refactor-api.md
     worktree: refactor-api-branch # optional
-
-  - id: implement-feature
-    kind: pr-work
-    model: ollama-cloud/deepseek-v4-flash:cloud
-    agent: build
-    prompt: prompts/feature-plan.md
-    worktree: feat-123-branch     # required for pr-work
-    pr_title: "Feat: implement feature X"  # optional for pr-work, defaults to task id
 ```
 
 Fields: `id` (required), `kind` (required), `model` (required),
@@ -269,7 +267,36 @@ enforced by:
 | `single-file-fix` | **available** | One agent edits one file from a focused prompt. Required: `target`. |
 | `multi-file-fix` | **available** | Full-directory fix/refactor with no single-file target. Works on the entire CWD. No `target` needed. |
 | `headless-spike` | **available** | Read-only investigation; agent writes a report file but does not edit source. Required: `target` (report path). Defaults to `--agent explore` (opencode's read-only built-in). |
-| `pr-work` | **available** | Creates a draft PR from the branch+worktree, then dispatches an agent to work in the worktree using the PR as chronicle. Required: `worktree`, `prompt`. Optional: `pr_title`. The subagent can push commits and add PR comments throughout its work. The PR and remote branch survive cleanup. |
+
+## Sashay dispatch pattern
+
+In a sashay, the calling agent has already created the branch, worktree, and draft PR. The calling agent then dispatches a subagent into the existing worktree using this skill. The calling agent includes chronicle instructions (commit, push, post PR comments) directly in the prompt file — the subagent follows them.
+
+The subagent's `--cwd` must point to the worktree directory, not the project root. Use `multi-file-fix` with `worktree` pointing to an existing branch name. The skill creates a worktree from that branch and sets CWD to it automatically.
+
+Example plan YAML from the calling agent:
+
+```yaml
+tasks:
+  - id: implement-fix
+    kind: multi-file-fix
+    model: ollama-cloud/deepseek-v4-flash:cloud
+    agent: build
+    prompt: prompts/implement-fix.md
+    worktree: fix-branch-name
+```
+
+The prompt file (`prompts/implement-fix.md`) includes the sashay chronicle instructions:
+
+```markdown
+You are working in a PR-tracked worktree. The draft PR URL is
+https://github.com/org/repo/pull/123.
+
+Chronicle rules:
+1. Commit and push your changes regularly.
+2. After each checkpoint, add a PR comment via the forge CLI.
+3. When done, ensure all tests pass and signal completion.
+```
 
 Add a kind by:
 

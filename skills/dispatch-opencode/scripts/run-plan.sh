@@ -116,7 +116,7 @@ while IFS=$'\t' read -r TID TKIND TMODEL TAGENT TPROMPT TTARGET TWORKTREE TPR_TI
     --task-id "$TID"
   )
   [ -n "$TWORKTREE" ] && [ "$TWORKTREE" != "-" ] && DISPATCH_ARGS+=(--worktree "$TWORKTREE")
-  [ -n "$TPR_TITLE" ] && [ "$TPR_TITLE" != "-" ] && DISPATCH_ARGS+=(--pr-title "$TPR_TITLE")
+  [ -n "$TPR_TITLE" ] && [ "$TPR_TITLE" != "-" ] && log "ignoring pr_title for task=$TID (pr-work kind removed)"
 
   # Call dispatch.sh — captures JSON output on stdout
   DISPATCH_OUT=$("$DISPATCH" "${DISPATCH_ARGS[@]}" 2>"$PLAN_DIR_OUT/$TID-dispatch-stderr.log") || {

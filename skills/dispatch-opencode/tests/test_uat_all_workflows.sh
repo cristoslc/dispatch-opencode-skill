@@ -231,13 +231,13 @@ echo "PID=999999997" > "$WORK/.subagents/stale-task3/.lock"
 # Clean up stale fixtures
 rm -rf "$WORK/.subagents/stale-task" "$WORK/.subagents/stale-task3" "$WORK/.worktrees/orphan-wt"
 
-# ── Test 6: run-plan.sh skips task on worktree conflict ──
+# ── Test 6: run-plan.sh skips task when worktree already exists ──
 
 echo "--- Test 6: run-plan.sh skips task on worktree conflict ---"
 setup_repo
 
-git -C "$WORK" checkout -b conflict-branch -q 2>/dev/null
-git -C "$WORK" checkout main -q 2>/dev/null
+mkdir -p "$WORK/.worktrees"
+ln -sf /nonexistent "$WORK/.worktrees/conflict-task"
 
 cat > plan6.yaml <<YAML
 tasks:

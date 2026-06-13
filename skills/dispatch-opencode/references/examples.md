@@ -122,51 +122,46 @@ The session ID is in the first line of `events.jsonl`:
 head -1 .subagents/<task-id>/events.jsonl | jq -r '.sessionID'
 ```
 
-## PR-work flow
+## Sashay dispatch
 
-Create a draft PR and dispatch an agent to work in the worktree:
+Dispatch a subagent into an existing sashay worktree (branch, worktree, and draft PR already created by the calling agent):
 
 ```sh
-# 1. Write the plan
+# 1. Write the prompt with chronicle instructions
+cat > prompts/implement-fix.md <<'MD'
+You are working in a PR-tracked worktree. The draft PR URL is
+https://github.com/org/repo/pull/123.
+
+Chronicle rules:
+1. Commit and push your changes regularly.
+2. After each checkpoint, add a PR comment via the forge CLI.
+3. When done, ensure all tests pass and signal completion.
+MD
+
+# 2. Write the plan — worktree branch must already exist on remote
 cat > plan.yaml <<'YAML'
 tasks:
-  - id: implement-feature
-    kind: pr-work
+  - id: implement-fix
+    kind: multi-file-fix
     model: ollama-cloud/deepseek-v4-flash:cloud
     agent: build
-    prompt: prompts/feature-plan.md
-    worktree: feat-123-branch
-    pr_title: "Feat: implement feature X"
+    prompt: prompts/implement-fix.md
+    worktree: fix-branch-name
 YAML
 
-# 2. Write the prompt (becomes the PR body)
-echo '# Feature X
-
-Implement feature X according to the spec at docs/specs/feature-x.md.
-
-## Working guidelines
-- Commit and push your progress
-- Add PR comments for each significant checkpoint
-- All tests must pass before completion' > prompts/feature-plan.md
-
-# 3. Dispatch
+# 3. Dispatch (creates worktree from the existing branch)
 result=$(bash skills/dispatch-opencode/scripts/run-plan.sh --plan plan.yaml)
 task_dir=$(echo "$result" | python3 -c "import json,sys; print(json.load(sys.stdin)['tasks'][0]['task_dir'])")
 
 # 4. Poll for completion
 bash skills/dispatch-opencode/scripts/poll-subagent.sh \
-  --task-id implement-feature --root "$(git rev-parse --show-toplevel)" \
-  --max-polls 24 --stale-threshold 120
+  --task-id implement-fix --root "$(git rev-parse --show-toplevel)" \
+  --max-polls 24
 
-# 5. Read result (includes PR URL)
+# 5. Read result
 cat "$task_dir/FINAL_OUTPUT.md"
 
-# 6. Clean up worktree only (branch + PR survive on remote)
+# 6. Clean up
 bash skills/dispatch-opencode/scripts/subagent-cleanup.sh \
-  --task-id implement-feature --root "$(git rev-parse --show-toplevel)"
-
-# 7. Operator reviews the PR with full chronicle in comments/commits
-# Optional: mark PR ready for review (resolve PR number from branch)
-pr_number=$(gh pr list --head feat-123-branch --json number --jq '.[0].number')
-gh pr ready "$pr_number"
+  --task-id implement-fix --root "$(git rev-parse --show-toplevel)"
 ```
