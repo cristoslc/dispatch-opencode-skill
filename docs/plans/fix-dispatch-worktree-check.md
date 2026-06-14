@@ -10,5 +10,5 @@ Strip brackets from `$3` before comparison in the awk expression on line 108 of 
 
 ## Tasks
 
-- [ ] Apply the one-line awk fix: strip `[` and `]` from `$3` before comparing against `$WORKTREE_BRANCH`
-- [ ] Verify the fix compiles (shellcheck)
+- [x] Apply the one-line awk fix: strip `[` and `]` from `$3` before comparing against `$WORKTREE_BRANCH`
+- [x] Verify the fix compiles (shellcheck)
