@@ -105,7 +105,7 @@ WORKTREE_DIR=""
 if [ -n "$WORKTREE_BRANCH" ]; then
   WORKTREE_DIR="$TASK_DIR/worktree"
   # Check for an existing worktree on this branch first
-  EXISTING_WT=$(git worktree list 2>/dev/null | awk -v b="$WORKTREE_BRANCH" '$3 == b || $3 == "refs/heads/"b { print $1; exit }' || true)
+  EXISTING_WT=$(git worktree list 2>/dev/null | awk -v b="$WORKTREE_BRANCH" '{ gsub(/[\[\]]/, "", $3); if ($3 == b || $3 == "refs/heads/"b) { print $1; exit } }' || true)
   if [ -n "$EXISTING_WT" ] && [ -d "$EXISTING_WT" ]; then
     # Use existing worktree — don't create a new one
     WORKTREE_DIR="$EXISTING_WT"
