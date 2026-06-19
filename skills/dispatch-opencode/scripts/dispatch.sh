@@ -68,7 +68,7 @@ fi
 # Validate worktree branch if provided
 if [ -n "$WORKTREE_BRANCH" ]; then
   case "$WORKTREE_BRANCH" in
-    *[!A-Za-z0-9_.-]*|"") err "unsafe worktree branch: '$WORKTREE_BRANCH'" ;;
+    *[!A-Za-z0-9_./-]*|"") err "unsafe worktree branch: '$WORKTREE_BRANCH'" ;;
   esac
 fi
 [ -n "$TASK_ID" ]     || err "--task-id is required"

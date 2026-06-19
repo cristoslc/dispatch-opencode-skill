@@ -54,7 +54,7 @@ if [ -n "$EXPECT_WORKTREE" ]; then
   # path and a label of '..' would let the suffix check accept paths
   # outside the intended worktree.
   case "$EXPECT_WORKTREE" in
-    *[!A-Za-z0-9_.-]*|"") err "unsafe worktree label: '$EXPECT_WORKTREE'" ;;
+    *[!A-Za-z0-9_./-]*|"") err "unsafe worktree label: '$EXPECT_WORKTREE'" ;;
   esac
 
   # Worktree mode requires an explicit absolute root so the suffix check
