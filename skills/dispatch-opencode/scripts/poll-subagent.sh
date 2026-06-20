@@ -26,8 +26,8 @@ err() { printf 'poll-subagent: %s\n' "$*" >&2; exit 1; }
 
 TASK_ID=""
 ROOT=""
-INTERVAL=15
-MAX_POLLS=12
+INTERVAL=30
+MAX_POLLS=20
 STALE_THRESHOLD=60
 
 while [ "$#" -gt 0 ]; do
