@@ -51,6 +51,8 @@ if not tasks:
     print('ERROR: plan has no tasks', file=sys.stderr)
     sys.exit(1)
 
+dangerously_write_trunk = plan.get('dangerously_write_trunk', False)
+
 for t in tasks:
     tid    = t.get('id', '')
     kind   = t.get('kind', '')
@@ -82,7 +84,8 @@ for t in tasks:
     target = target if target else '-'
     worktree = worktree if worktree else '-'
     pr_title = pr_title if pr_title else '-'
-    print(f'{tid}\t{kind}\t{model}\t{agent}\t{prompt}\t{target}\t{worktree}\t{pr_title}')
+    dwf = '1' if dangerously_write_trunk else '0'
+    print(f'{tid}\t{kind}\t{model}\t{agent}\t{prompt}\t{target}\t{worktree}\t{pr_title}\t{dwf}')
 " 2>/dev/null) || err "plan parsing failed — check YAML syntax and required fields (id, kind, model, prompt)"
 
 # Allocate plan directory for tracking
@@ -100,7 +103,7 @@ FIRST=1
 DISPATCHED=0
 SKIPPED=0
 
-while IFS=$'\t' read -r TID TKIND TMODEL TAGENT TPROMPT TTARGET TWORKTREE TPR_TITLE; do
+while IFS=$'\t' read -r TID TKIND TMODEL TAGENT TPROMPT TTARGET TWORKTREE TPR_TITLE TDWF; do
   # Resolve root: use plan dir as project root
   ROOT="$PLAN_DIR"
 
@@ -117,6 +120,7 @@ while IFS=$'\t' read -r TID TKIND TMODEL TAGENT TPROMPT TTARGET TWORKTREE TPR_TI
   )
   [ -n "$TWORKTREE" ] && [ "$TWORKTREE" != "-" ] && DISPATCH_ARGS+=(--worktree "$TWORKTREE")
   [ -n "$TPR_TITLE" ] && [ "$TPR_TITLE" != "-" ] && log "ignoring pr_title for task=$TID (pr-work kind removed)"
+  [ "$TDWF" = "1" ] && DISPATCH_ARGS+=(--dangerously-write-trunk)
 
   # Call dispatch.sh — captures JSON output on stdout
   DISPATCH_OUT=$("$DISPATCH" "${DISPATCH_ARGS[@]}" 2>"$PLAN_DIR_OUT/$TID-dispatch-stderr.log") || {

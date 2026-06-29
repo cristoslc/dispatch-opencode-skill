@@ -44,6 +44,7 @@ ROOT="$WORK"
 
 echo "test: run-plan.sh with no agent field..."
 cat > "$ROOT/plan-no-agent.yaml" <<'YAML'
+dangerously_write_trunk: true
 tasks:
   - id: no-agent-1
     kind: single-file-fix
@@ -77,6 +78,7 @@ OUT=$("$DISPATCH" \
   --prompt-file "$ROOT/prompt.md" \
   --target src/foo.py \
   --task-id test-empty-agent \
+  --dangerously-write-trunk \
   2>/dev/null) || err "dispatch.sh failed with --agent '-'"
 
 echo "$OUT" | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['status']=='dispatched'" 2>/dev/null \
@@ -90,6 +92,7 @@ ok "dispatch.sh accepts --agent '-' placeholder"
 
 echo "test: run-plan.sh with mixed agent fields..."
 cat > "$ROOT/plan-mixed.yaml" <<'YAML'
+dangerously_write_trunk: true
 tasks:
   - id: has-agent
     kind: single-file-fix

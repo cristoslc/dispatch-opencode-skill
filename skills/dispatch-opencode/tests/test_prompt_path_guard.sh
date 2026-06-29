@@ -45,6 +45,7 @@ OUT=$("$DISPATCH" \
   --prompt-file "$ROOT/.subagents/$TASK_ID/prompt.md" \
   --target src/foo.py \
   --task-id "$TASK_ID" \
+  --dangerously-write-trunk \
   2>&1 || true)
 
 if echo "$OUT" | grep -q "resolves to the same path"; then
@@ -69,6 +70,7 @@ printf 'fix the bug' > "$ROOT/prompt.md"
   --prompt-file "$ROOT/prompt.md" \
   --target src/foo.py \
   --task-id guard-test-2 \
+  --dangerously-write-trunk \
   2>/dev/null || err "dispatch.sh should succeed with prompt outside .subagents/"
 
 ok "dispatch.sh succeeded with prompt outside .subagents/"

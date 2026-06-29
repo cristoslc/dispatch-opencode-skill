@@ -55,7 +55,7 @@ for errors. Kill the PID manually and call
 
 ### subagent-abandon.sh reports "branch not found"
 
-The task did not use a worktree branch — only `pr-work` and tasks
+The task did not use a worktree branch — only tasks with
 with an explicit `worktree:` field create one. The "not found" message
 is informational; cleanup still succeeds.
 

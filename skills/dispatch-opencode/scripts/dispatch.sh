@@ -11,7 +11,8 @@
 #   dispatch.sh --root <project-root> --cwd <worktree-or-project-dir> \
 #     --kind <kind> --model <model> --agent <agent> \
 #     --prompt-file <path> [--target <path>] --task-id <id> \
-#     [--worktree <branch>] [--pr-title <title>]
+#     [--worktree <branch>] [--pr-title <title>] \
+#     [--dangerously-write-trunk]
 #
 # Note: --target is required for single-file-fix and headless-spike.
 #
@@ -37,6 +38,7 @@ TARGET=""
 TASK_ID=""
 WORKTREE_BRANCH=""
 PR_TITLE=""
+DANGEROUSLY_WRITE_TRUNK=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -49,6 +51,7 @@ while [ "$#" -gt 0 ]; do
     --target)      TARGET="$2"; shift 2 ;;
     --task-id)     TASK_ID="$2"; shift 2 ;;
     --worktree)    WORKTREE_BRANCH="$2"; shift 2 ;;
+    --dangerously-write-trunk) DANGEROUSLY_WRITE_TRUNK=1; shift ;;
     *)             err "unknown flag: $1" ;;
   esac
 done
@@ -84,11 +87,6 @@ esac
 ROOT="$(cd "$ROOT" && pwd)"
 CWD="$(cd "$CWD" && pwd)"
 
-# Verify CWD
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SKILL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-bash "$SKILL_DIR/scripts/verify-cwd.sh" "$CWD" >/dev/null || err "cwd verification failed"
-
 # Allocate task directory
 SUBAGENTS_DIR="$ROOT/.subagents"
 TASK_DIR="$SUBAGENTS_DIR/$TASK_ID"
@@ -120,6 +118,13 @@ if [ -n "$WORKTREE_BRANCH" ]; then
   # CWD becomes the worktree
   CWD="$WORKTREE_DIR"
 fi
+
+# Verify CWD (after worktree creation so worktree tasks are on their branch, not trunk)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SKILL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+VERIFY_ARGS=("$CWD")
+[ "$DANGEROUSLY_WRITE_TRUNK" -eq 1 ] && VERIFY_ARGS+=(--dangerously-write-trunk)
+VERIFY_OUT=$(bash "$SKILL_DIR/scripts/verify-cwd.sh" "${VERIFY_ARGS[@]}" 2>&1) || err "$VERIFY_OUT"
 
 # Determine template and render
 TEMPLATES_DIR="$SKILL_DIR/templates/cli"

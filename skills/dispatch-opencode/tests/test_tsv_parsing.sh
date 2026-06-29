@@ -62,7 +62,7 @@ for t in tasks:
     agent = agent if agent else '-'
     worktree = worktree if worktree else '-'
     pr_title = pr_title if pr_title else '-'
-    print(f'{tid}\t{kind}\t{model}\t{agent}\t{prompt}\t{target}\t{worktree}\t{pr_title}')
+    print(f'{tid}\t{kind}\t{model}\t{agent}\t{prompt}\t{target}\t{worktree}\t{pr_title}\t0')
 ")
 # Verify no consecutive tabs (the original bug)
 if echo "$TSV_OUT" | grep $'\t\t'; then
@@ -71,9 +71,9 @@ else
   ok "TSV has no consecutive tabs"
 fi
 
-# Verify 8 fields
+# Verify 9 fields
 FIELD_COUNT=$(echo "$TSV_OUT" | awk -F'\t' '{print NF}')
-[ "$FIELD_COUNT" -eq 8 ] && ok "TSV has exactly 8 fields" || err "TSV has $FIELD_COUNT fields (expected 8)"
+[ "$FIELD_COUNT" -eq 9 ] && ok "TSV has exactly 9 fields" || err "TSV has $FIELD_COUNT fields (expected 9)"
 
 # Verify agent field is '-'
 AGENT_FIELD=$(echo "$TSV_OUT" | awk -F'\t' '{print $4}')
@@ -103,10 +103,10 @@ for t in tasks:
     agent = agent if agent else '-'
     worktree = worktree if worktree else '-'
     pr_title = pr_title if pr_title else '-'
-    print(f'{tid}\t{kind}\t{model}\t{agent}\t{prompt}\t{target}\t{worktree}\t{pr_title}')
+    print(f'{tid}\t{kind}\t{model}\t{agent}\t{prompt}\t{target}\t{worktree}\t{pr_title}\t0')
 ")
 FIELD_COUNT2=$(echo "$TSV_FULL" | awk -F'\t' '{print NF}')
-[ "$FIELD_COUNT2" -eq 8 ] && ok "full TSV has 8 fields" || err "full TSV has $FIELD_COUNT2 fields"
+[ "$FIELD_COUNT2" -eq 9 ] && ok "full TSV has 9 fields" || err "full TSV has $FIELD_COUNT2 fields"
 
 AGENT2=$(echo "$TSV_FULL" | awk -F'\t' '{print $4}')
 [ "$AGENT2" = "explore" ] && ok "populated agent passes through" || err "agent is '$AGENT2' (expected 'explore')"
@@ -118,8 +118,9 @@ PT2=$(echo "$TSV_FULL" | awk -F'\t' '{print $8}')
 [ "$PT2" = "My PR" ] && ok "populated pr_title passes through" || err "pr_title is '$PT2' (expected 'My PR')"
 
 # Full TSV round-trip through bash IFS read
-while IFS=$'\t' read -r TID2 TKIND2 TMODEL2 TAGENT2 TPROMPT2 TTARGET2 TWORKTREE2 TPR_TITLE2; do
+while IFS=$'\t' read -r TID2 TKIND2 TMODEL2 TAGENT2 TPROMPT2 TTARGET2 TWORKTREE2 TPR_TITLE2 TDWF2; do
   [ "$TPR_TITLE2" = "My PR" ] && ok "full TSV pr_title round-trips through bash IFS" || err "TPR_TITLE2='$TPR_TITLE2' (expected 'My PR')"
+  [ "$TDWF2" = "0" ] && ok "full TSV dangerously_write_trunk=0 round-trips through bash IFS" || err "TDWF2='$TDWF2' (expected '0')"
 done <<< "$TSV_FULL"
 
 # ── Unit: bash IFS=$'\t' read does not shift fields ──
@@ -127,7 +128,7 @@ done <<< "$TSV_FULL"
 echo "--- Unit: bash IFS tab-read field alignment ---"
 
 echo "  Testing: placeholder TSV round-trips through bash correctly..."
-while IFS=$'\t' read -r TID TKIND TMODEL TAGENT TPROMPT TTARGET TWORKTREE TPR_TITLE; do
+while IFS=$'\t' read -r TID TKIND TMODEL TAGENT TPROMPT TTARGET TWORKTREE TPR_TITLE TDWF; do
   [ "$TID" = "t1" ] && ok "TID=t1" || err "TID='$TID' (expected t1)"
   [ "$TKIND" = "single-file-fix" ] && ok "TKIND=single-file-fix" || err "TKIND='$TKIND'"
   [ "$TMODEL" = "m" ] && ok "TMODEL=m" || err "TMODEL='$TMODEL'"
@@ -136,6 +137,7 @@ while IFS=$'\t' read -r TID TKIND TMODEL TAGENT TPROMPT TTARGET TWORKTREE TPR_TI
   [ "$TTARGET" = "s/f.py" ] && ok "TTARGET=s/f.py" || err "TTARGET='$TTARGET'"
   [ "$TWORKTREE" = "-" ] && ok "TWORKTREE=-" || err "TWORKTREE='$TWORKTREE'"
   [ "$TPR_TITLE" = "-" ] && ok "TPR_TITLE=-" || err "TPR_TITLE='$TPR_TITLE'"
+  [ "$TDWF" = "0" ] && ok "TDWF=0" || err "TDWF='$TDWF' (expected '0')"
 done <<< "$TSV_OUT"
 
 # ── Unit: dispatch.sh agent defaulting ──
@@ -149,6 +151,7 @@ OUT=$("$DISPATCH" \
   --agent "-" \
   --prompt-file "$ROOT/prompt.md" --target src/foo.py \
   --task-id test-unit-agent-dash \
+  --dangerously-write-trunk \
   2>/dev/null) || { err "dispatch.sh failed with --agent '-'"; }
 TASK_DIR="$ROOT/.subagents/test-unit-agent-dash"
 
@@ -174,6 +177,7 @@ echo "--- Adversarial: edge cases ---"
 
 echo "  Testing: plan YAML with explicit agent='-' literal..."
 cat > "$ROOT/adv-literal-dash.yaml" <<'YAML'
+dangerously_write_trunk: true
 tasks:
   - id: adv-dash
     kind: single-file-fix
@@ -193,6 +197,7 @@ TASK_DIR_ADV="$ROOT/.subagents/adv-dash"
 
 echo "  Testing: plan with only agent omitted (no key at all)..."
 cat > "$ROOT/adv-no-agent.yaml" <<'YAML'
+dangerously_write_trunk: true
 tasks:
   - id: adv-no-agent
     kind: single-file-fix
@@ -210,6 +215,7 @@ TASK_DIR2="$ROOT/.subagents/adv-no-agent"
 
 echo "  Testing: plan with only worktree omitted (no key at all)..."
 cat > "$ROOT/adv-no-worktree.yaml" <<'YAML'
+dangerously_write_trunk: true
 tasks:
   - id: adv-no-wt
     kind: single-file-fix
@@ -228,6 +234,7 @@ TASK_DIR3="$ROOT/.subagents/adv-no-wt"
 
 echo "  Testing: plan with both agent and worktree omitted..."
 cat > "$ROOT/adv-no-both.yaml" <<'YAML'
+dangerously_write_trunk: true
 tasks:
   - id: adv-neither
     kind: single-file-fix
@@ -249,6 +256,7 @@ OUT5=$("$DISPATCH" \
   --kind single-file-fix --model "ollama-cloud/deepseek-v4-flash:cloud" \
   --prompt-file "$ROOT/prompt.md" --target src/foo.py \
   --task-id test-unit-no-agent-flag \
+  --dangerously-write-trunk \
   2>/dev/null) || { err "dispatch.sh failed without --agent flag"; }
 
 TASK_DIR5="$ROOT/.subagents/test-unit-no-agent-flag"

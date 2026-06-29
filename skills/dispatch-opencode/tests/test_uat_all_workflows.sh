@@ -80,6 +80,7 @@ echo "--- Test 1: Single task via run-plan.sh ---"
 setup_repo
 
 cat > plan1.yaml <<'YAML'
+dangerously_write_trunk: true
 tasks:
   - id: fix-foo
     kind: single-file-fix
@@ -119,6 +120,7 @@ echo "--- Test 2: Parallelize N tasks via run-plan.sh ---"
 setup_repo
 
 cat > plan2.yaml <<'YAML'
+dangerously_write_trunk: true
 tasks:
   - id: fix-foo-par
     kind: single-file-fix
@@ -260,6 +262,7 @@ echo "--- Test 7: headless-spike via run-plan.sh ---"
 setup_repo
 
 cat > plan7.yaml <<'YAML'
+dangerously_write_trunk: true
 tasks:
   - id: spike-1
     kind: headless-spike
@@ -343,19 +346,19 @@ setup_repo
 "$DISPATCH" --root "$WORK" --cwd "$WORK" --kind single-file-fix \
   --model "ollama-cloud/deepseek-v4-flash:cloud" --agent build \
   --prompt-file "$WORK/prompt-fix-foo.md" --target src/foo.py \
-  --task-id "../../../etc/passwd" 2>/dev/null \
+  --task-id "../../../etc/passwd" --dangerously-write-trunk 2>/dev/null \
   && err "accepted path traversal task-id" || ok "rejected path traversal task-id"
 
 "$DISPATCH" --root "$WORK" --cwd "$WORK" --kind single-file-fix \
   --model "ollama-cloud/deepseek-v4-flash:cloud" --agent build \
   --prompt-file "$WORK/prompt-fix-foo.md" --target src/foo.py \
-  --task-id "task with spaces" 2>/dev/null \
+  --task-id "task with spaces" --dangerously-write-trunk 2>/dev/null \
   && err "accepted task-id with spaces" || ok "rejected task-id with spaces"
 
 "$DISPATCH" --root "$WORK" --cwd "$WORK" --kind single-file-fix \
   --model "ollama-cloud/deepseek-v4-flash:cloud" --agent build \
   --prompt-file "$WORK/prompt-fix-foo.md" --target src/foo.py \
-  --task-id "" 2>/dev/null \
+  --task-id "" --dangerously-write-trunk 2>/dev/null \
   && err "accepted empty task-id" || ok "rejected empty task-id"
 
 # ── Summary ──

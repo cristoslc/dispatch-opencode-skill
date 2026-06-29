@@ -127,6 +127,7 @@ Call `cleanup-stale.sh [--abandon]` after a crash or long idle period.
 ## Plan schema
 
 ```yaml
+dangerously_write_trunk: false   # optional. Set true to allow dispatch to main/master.
 tasks:
   - id: fix-auth
     kind: single-file-fix
@@ -148,6 +149,12 @@ Fields: `id` (required), `kind` (required), `model` (required),
 `prompt` (required, path to prompt file), `target` (required for
 single-file-fix, path inside cwd; not used for multi-file-fix),
 `worktree` (optional, branch name), `agent` (optional, defaults per kind).
+
+Top-level field `dangerously_write_trunk` (optional, default `false`):
+when `false`, dispatch to a trunk branch (main/master) is rejected with
+a hint to set this flag. Set to `true` to allow dispatching directly to
+the project root — use only when you are certain the subagent should
+write to trunk.
 
 Store prompt files in `prompts/<task-id>.md` at the project root.
 For example, a plan referencing `prompt: prompts/fix-auth.md` has the

@@ -51,6 +51,7 @@ OUT=$("$DISPATCH" \
   --prompt-file "$ROOT/prompt.md" \
   --target src/foo.py \
   --task-id test-dispatch-1 \
+  --dangerously-write-trunk \
   2>/dev/null) || err "dispatch.sh failed"
 
 # Parse JSON output
@@ -134,6 +135,7 @@ ok "worktree symlink removed after abandon"
 
 echo "test: run-plan.sh with 1-task plan..."
 cat > "$ROOT/plan1.yaml" <<'YAML'
+dangerously_write_trunk: true
 tasks:
   - id: plan-task-1
     kind: single-file-fix
@@ -159,6 +161,7 @@ git -C "$ROOT" checkout -b conflict-branch -q 2>/dev/null
 git -C "$ROOT" checkout main -q 2>/dev/null
 
 cat > "$ROOT/plan2.yaml" <<YAML
+dangerously_write_trunk: true
 tasks:
   - id: conflict-task
     kind: single-file-fix

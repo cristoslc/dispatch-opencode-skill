@@ -53,6 +53,7 @@ OUT=$("$DISPATCH" \
   --prompt-file "$WORK/prompt.md" \
   --target src/foo.py \
   --task-id lockwatch-1 \
+  --dangerously-write-trunk \
   2>/dev/null) || err "dispatch.sh failed"
 
 # Parse JSON output

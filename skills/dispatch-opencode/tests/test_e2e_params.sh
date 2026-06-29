@@ -56,6 +56,7 @@ OUT=$("$DISPATCH" \
   --prompt-file "$WORK/prompt.md" \
   --target "$WORK/$TEST_TARGET" \
   --task-id params-1 \
+  --dangerously-write-trunk \
   2>/dev/null) || err "dispatch.sh failed"
 
 TASK_DIR=$(echo "$OUT" | python3 -c "import json,sys; print(json.load(sys.stdin)['task_dir'])" 2>/dev/null) \

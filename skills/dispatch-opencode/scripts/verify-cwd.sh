@@ -4,10 +4,14 @@
 # matches the expected branch and/or worktree label, and (when worktree
 # verification is requested) is rooted under the configured worktree-root.
 #
+# By default, dispatching to a trunk branch (main/master) is REJECTED.
+# Pass --dangerously-write-trunk to override.
+#
 # Usage:
 #   verify-cwd.sh <absolute-path> \
 #     [--branch <name>] \
-#     [--worktree <label> --worktree-root <absolute-root>]
+#     [--worktree <label> --worktree-root <absolute-root>] \
+#     [--dangerously-write-trunk]
 
 set -euo pipefail
 
@@ -19,12 +23,14 @@ PATH_ARG="$1"; shift
 EXPECT_BRANCH=""
 EXPECT_WORKTREE=""
 EXPECT_WORKTREE_ROOT=""
+DANGEROUSLY_WRITE_TRUNK=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --branch)        EXPECT_BRANCH="$2"; shift 2 ;;
-    --worktree)      EXPECT_WORKTREE="$2"; shift 2 ;;
-    --worktree-root) EXPECT_WORKTREE_ROOT="$2"; shift 2 ;;
-    *)               err "unknown flag: $1" ;;
+    --branch)                 EXPECT_BRANCH="$2"; shift 2 ;;
+    --worktree)               EXPECT_WORKTREE="$2"; shift 2 ;;
+    --worktree-root)          EXPECT_WORKTREE_ROOT="$2"; shift 2 ;;
+    --dangerously-write-trunk) DANGEROUSLY_WRITE_TRUNK=1; shift ;;
+    *)                        err "unknown flag: $1" ;;
   esac
 done
 
@@ -46,6 +52,16 @@ ACTUAL_BRANCH="$(git branch --show-current)"
 
 if [ -n "$EXPECT_BRANCH" ] && [ "$ACTUAL_BRANCH" != "$EXPECT_BRANCH" ]; then
   err "branch mismatch: expected '$EXPECT_BRANCH', got '$ACTUAL_BRANCH'"
+fi
+
+# Reject dispatch to trunk (main/master) unless --dangerously-write-trunk is set.
+# This prevents accidental subagent writes to the project root.
+if [ "$DANGEROUSLY_WRITE_TRUNK" -eq 0 ]; then
+  case "$ACTUAL_BRANCH" in
+    main|master)
+      err "refusing to dispatch to trunk branch '$ACTUAL_BRANCH' — pass --dangerously-write-trunk to override"
+      ;;
+  esac
 fi
 
 if [ -n "$EXPECT_WORKTREE" ]; then
