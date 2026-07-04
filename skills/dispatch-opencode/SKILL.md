@@ -48,6 +48,10 @@ For previous versions of this skill (ACP/CLI/HTTP), see ADR-001.
   already exist on the forge. Use this skill to dispatch a subagent into
   the worktree with sashay chronicle instructions in the prompt. The
   subagent will commit, push, and post PR comments throughout its work.
+- The agent wants to fire-and-forget a long-running task and continue
+  working (background dispatch).
+- The operator wants to background work from a terminal session and close
+  it, letting the watcher daemon handle the lifecycle.
 
 ## When NOT to use
 
@@ -111,6 +115,15 @@ Call `cleanup-stale.sh [--abandon]` after a crash or long idle period.
 - Without `--abandon`: reports stale locks and orphaned worktrees.
 - With `--abandon`: calls `subagent-abandon.sh` for each.
 
+### Workflow 4: Background dispatch (fire-and-forget)
+
+1. Ensure the watcher daemon is running (`watcher.sh status`).
+2. Write a plan YAML with `mode: background` (and optionally `ttl_sec`).
+3. Write the plan to `.subagents/watch/<plan-name>.yaml`.
+4. Continue working — the watcher picks it up, dispatches, polls, and
+   cleans up.
+5. Check results later at `.subagents/watch/results/<task-id>.md`.
+
 ## Script inventory
 
 | Script | Agent-facing | Purpose |
@@ -123,6 +136,28 @@ Call `cleanup-stale.sh [--abandon]` after a crash or long idle period.
 | `dispatch.sh` | no (internal) | Single-task prepare, spawn, confirm .lock appeared |
 | `verify-cwd.sh` | no (internal) | Fail-closed CWD verification |
 | `validate-run.sh` | no (internal) | Post-hoc event stream validation |
+| `watcher.sh` | yes | Daemon entry point — start/stop/status |
+| `watcher-process.sh` | no (internal) | Process a single plan from the watch directory |
+
+## Watcher daemon
+
+The watcher daemon (`watcher.sh`) is a persistent background process that
+monitors a directory for plan YAMLs and processes them autonomously.
+
+```
+watcher.sh start [--watch-dir <path>] [--interval <sec>]
+watcher.sh stop
+watcher.sh status
+```
+
+- `start` — launches daemon, writes PID to `.subagents/watcher.pid`,
+  logs to `.subagents/watcher.log`
+- `stop` — terminates daemon gracefully
+- `status` — returns JSON with running status, PID, active task count
+
+The daemon must be running for background dispatch. If it is not running,
+write plans to `.subagents/watch/` anyway — they will be processed when
+the daemon starts.
 
 ## Plan schema
 
@@ -148,7 +183,10 @@ tasks:
 Fields: `id` (required), `kind` (required), `model` (required),
 `prompt` (required, path to prompt file), `target` (required for
 single-file-fix, path inside cwd; not used for multi-file-fix),
-`worktree` (optional, branch name), `agent` (optional, defaults per kind).
+`worktree` (optional, branch name), `agent` (optional, defaults per kind),
+`mode` (optional, `foreground` or `background`, default `foreground`),
+`ttl_sec` (optional, wall-clock deadline in seconds for background tasks,
+default 1800).
 
 Top-level field `dangerously_write_trunk` (optional, default `false`):
 when `false`, dispatch to a trunk branch (main/master) is rejected with
@@ -194,6 +232,15 @@ run-plan.sh returns JSON on stdout (all other output goes to stderr):
 ```
 <project-root>/
   .subagents/
+    watcher.pid           ← PID file for watcher daemon
+    watcher.log           ← watcher daemon log
+    watch/                ← agent drops background plans here
+      plan-001.yaml
+      processing/         ← watcher moves plans here while working
+      completed/          ← watcher moves plans here when done
+      failed/             ← watcher moves plans here on failure
+      results/            ← watcher writes result summaries here
+        fix-auth.md
     <task-id>/
       prompt.md
       start-subagent.sh

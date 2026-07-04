@@ -1,0 +1,7 @@
+tasks:
+  - id: spec-003-skill-updates
+    kind: multi-file-fix
+    model: ollama-cloud/deepseek-v4-flash:cloud
+    agent: build
+    prompt: prompts/spec-003-skill-updates.md
+    worktree: watcher-daemon
