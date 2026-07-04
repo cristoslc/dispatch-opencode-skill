@@ -74,6 +74,8 @@ for t in tasks:
     target = t.get('target', '')
     worktree = t.get('worktree', '')
     pr_title = t.get('pr_title', '')
+    mode   = t.get('mode', 'foreground')
+    ttl_sec = t.get('ttl_sec', 1800)
 
     if not tid:
         print('task missing id', file=sys.stderr)

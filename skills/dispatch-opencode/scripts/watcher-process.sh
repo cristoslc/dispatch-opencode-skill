@@ -51,8 +51,9 @@ tasks = plan.get('tasks', [])
 result = {}
 for t in tasks:
     tid = t.get('id', '')
+    mode = t.get('mode', 'foreground')
     ttl = t.get('ttl_sec', 1800)
-    result[tid] = ttl
+    result[tid] = {'ttl': ttl, 'mode': mode}
 print(json.dumps(result))
 " 2>/dev/null) || err "failed to parse plan YAML for ttl_sec"
 
@@ -133,7 +134,14 @@ OUT
   TASK_DIR="$ROOT/.subagents/$TASK_ID"
   LOCKFILE="$TASK_DIR/.lock"
   EVENTS="$TASK_DIR/events.jsonl"
-  TTL=$(echo "$TASK_TTLS" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('$TASK_ID', 1800))" 2>/dev/null || echo "1800")
+  TASK_MODE=$(echo "$TASK_TTLS" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('$TASK_ID', {}).get('mode', 'foreground'))" 2>/dev/null || echo "foreground")
+  TTL=$(echo "$TASK_TTLS" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('$TASK_ID', {}).get('ttl', 1800))" 2>/dev/null || echo "1800")
+
+  # Skip foreground tasks — they are handled by run-plan.sh directly
+  if [ "$TASK_MODE" = "foreground" ]; then
+    log "task=$TASK_ID mode=foreground — skipping (handled by run-plan.sh directly)"
+    continue
+  fi
 
   log "polling task=$TASK_ID ttl=${TTL}s interval=${POLL_INTERVAL}s max-polls=$MAX_POLLS"
 
