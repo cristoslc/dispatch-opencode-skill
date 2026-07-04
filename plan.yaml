@@ -1,0 +1,7 @@
+tasks:
+  - id: spec-001-watcher-daemon
+    kind: multi-file-fix
+    model: ollama-cloud/deepseek-v4-flash:cloud
+    agent: build
+    prompt: prompts/spec-001-watcher-daemon.md
+    worktree: watcher-daemon

@@ -10,7 +10,10 @@
 # and monitors them on its own interval.
 #
 # Usage:
-#   run-plan.sh --plan <plan.yaml>
+#   run-plan.sh --plan <plan.yaml> [--root <project-root>]
+#
+# --root is optional. When provided, it sets the project root for dispatch
+# and .subagents/ tracking. When omitted, the plan file's directory is used.
 #
 # Exit codes:
 #   0 — plan processed (some tasks may have been skipped)
@@ -22,10 +25,12 @@ err() { printf 'run-plan: %s\n' "$*" >&2; exit 1; }
 log() { printf 'run-plan: %s\n' "$*" >&2; }
 
 PLAN_FILE=""
+ROOT=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --plan) PLAN_FILE="$2"; shift 2 ;;
+    --root) ROOT="$2"; shift 2 ;;
     *)      err "unknown flag: $1" ;;
   esac
 done
@@ -38,6 +43,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DISPATCH="$SCRIPT_DIR/dispatch.sh"
 
 [ -x "$DISPATCH" ] || err "dispatch.sh not found or not executable: $DISPATCH"
+
+# Resolve root: use --root if provided, otherwise plan dir
+if [ -n "$ROOT" ]; then
+  ROOT="$(cd "$ROOT" 2>/dev/null && pwd)" || err "root does not exist: $ROOT"
+else
+  ROOT="$PLAN_DIR"
+fi
 
 # Parse and validate plan YAML, produce TSV for dispatch loop
 TASKS_TSV=$(python3 -c "
@@ -91,7 +103,7 @@ for t in tasks:
 # Allocate plan directory for tracking
 PLAN_TS=$(date -u +%Y%m%dT%H%M%SZ)
 PLAN_ID="plan-${PLAN_TS}"
-PLAN_DIR_OUT="$PLAN_DIR/.subagents/$PLAN_ID"
+PLAN_DIR_OUT="$ROOT/.subagents/$PLAN_ID"
 mkdir -p "$PLAN_DIR_OUT"
 
 TASK_COUNT=$(echo "$TASKS_TSV" | wc -l | tr -d ' ')
@@ -104,8 +116,6 @@ DISPATCHED=0
 SKIPPED=0
 
 while IFS=$'\t' read -r TID TKIND TMODEL TAGENT TPROMPT TTARGET TWORKTREE TPR_TITLE TDWF; do
-  # Resolve root: use plan dir as project root
-  ROOT="$PLAN_DIR"
 
   # Build dispatch args
   DISPATCH_ARGS=(
