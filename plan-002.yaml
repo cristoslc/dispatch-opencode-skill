@@ -1,7 +1,0 @@
-tasks:
-  - id: spec-002-background-mode-ttl
-    kind: multi-file-fix
-    model: ollama-cloud/deepseek-v4-flash:cloud
-    agent: build
-    prompt: prompts/spec-002-background-mode-ttl.md
-    worktree: watcher-daemon
