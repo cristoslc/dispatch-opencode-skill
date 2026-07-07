@@ -35,6 +35,10 @@ For previous versions of this skill (ACP/CLI/HTTP), see ADR-001.
 
 ## When to use
 
+### Primary pattern: two-call dispatch
+
+Use the two-call pattern when the agent is actively running and can poll:
+
 - The task takes long enough that the agent should not block (refactors,
   dependency upgrades, research sprints).
 - The agent wants to parallelize N independent tasks with per-task worktree
@@ -48,8 +52,13 @@ For previous versions of this skill (ACP/CLI/HTTP), see ADR-001.
   already exist on the forge. Use this skill to dispatch a subagent into
   the worktree with sashay chronicle instructions in the prompt. The
   subagent will commit, push, and post PR comments throughout its work.
+
+### Secondary pattern: background dispatch (watcher daemon)
+
+Use the watcher daemon when the agent will not be around to poll:
+
 - The agent wants to fire-and-forget a long-running task and continue
-  working (background dispatch).
+  working.
 - The operator wants to background work from a terminal session and close
   it, letting the watcher daemon handle the lifecycle.
 
@@ -83,30 +92,66 @@ For previous versions of this skill (ACP/CLI/HTTP), see ADR-001.
 
 ## Agent workflows
 
-### Workflow 1: Single task
+### Workflow 1: Single task (two-call pattern)
 
-1. Write a 1-task plan YAML.
-2. Call `run-plan.sh --plan plan.yaml`.
-3. Parse JSON output for lockfile path and PID.
-4. Call `poll-subagent.sh --task-id <id> --root <path>`. It logs
-   event line count each iteration, detects stuck tasks (exit 2),
-   and times out (exit 3).
-5. On completion (exit 0): read `FINAL_OUTPUT.md`, merge work, call
-   `subagent-cleanup.sh`.
-6. On failure or stuck (exit 2/3): call `subagent-abandon.sh`.
+This is the primary dispatch pattern. The agent calls `run-plan.sh` to
+dispatch, then calls `poll-subagent.sh` later to check in. Between the
+two calls, the agent can do other work.
 
-### Workflow 2: Parallelize N tasks
+**Call 1 — dispatch (returns immediately):**
+
+```
+run-plan.sh --plan plan.yaml
+```
+
+Returns JSON with lockfile path and PID. The subagent starts in the
+background. The agent is free to do other work — read files, write the
+next plan, investigate results from a previous task.
+
+**Call 2 — poll (called later):**
+
+```
+poll-subagent.sh --task-id <id> --root <path>
+```
+
+Polls the lockfile and events log. Logs event line count each iteration,
+detects stuck tasks (exit 2), and times out (exit 3).
+
+**After poll completes:**
+
+- Exit 0 (completed): read `FINAL_OUTPUT.md`, merge work, call
+  `subagent-cleanup.sh`.
+- Exit 2/3 (stuck/timeout): call `subagent-abandon.sh`.
+
+### Workflow 2: Parallelize N tasks (dispatch-all-then-poll)
+
+Dispatch all N tasks first, then poll each one. This lets N subagents
+run concurrently while the agent does other work between polls.
 
 1. Write an N-task plan YAML (only tasks whose dependencies are
    satisfied).
-2. Call `run-plan.sh --plan plan.yaml`.
-3. Parse JSON output for N lockfile paths and PIDs.
-4. For each dispatched task, call `poll-subagent.sh --task-id <id>
-   --root <path>`. It logs event line count per iteration, detects
-   stuck tasks, and times out.
-5. Per completed task: read `FINAL_OUTPUT.md`, merge work, call
+2. Call `run-plan.sh --plan plan.yaml` once — returns immediately with
+   N lockfile paths and PIDs.
+3. For each task, call `poll-subagent.sh --task-id <id> --root <path>`
+   when ready to check in. The agent can do other work between polls.
+4. Per completed task: read `FINAL_OUTPUT.md`, merge work, call
    `subagent-cleanup.sh`.
-6. Per failed or stuck task: call `subagent-abandon.sh`.
+5. Per failed or stuck task: call `subagent-abandon.sh`.
+
+**Example — dispatch 3 tasks in parallel, then check in on each:**
+
+```
+# Phase 1: dispatch all three
+run-plan.sh --plan plan.yaml
+# → returns 3 lockfile paths, 3 PIDs
+
+# Phase 2: do other work (read files, write prompts, etc.)
+
+# Phase 3: check in on each task
+poll-subagent.sh --task-id task-a --root /path
+poll-subagent.sh --task-id task-b --root /path
+poll-subagent.sh --task-id task-c --root /path
+```
 
 ### Workflow 3: Stale resource recovery
 
@@ -115,7 +160,10 @@ Call `cleanup-stale.sh [--abandon]` after a crash or long idle period.
 - Without `--abandon`: reports stale locks and orphaned worktrees.
 - With `--abandon`: calls `subagent-abandon.sh` for each.
 
-### Workflow 4: Background dispatch (fire-and-forget)
+### Workflow 4: Background dispatch (fire-and-forget) — optional secondary pattern
+
+Use this when the agent will not be around to poll. Requires the watcher
+daemon to be running.
 
 1. Ensure the watcher daemon is running (`watcher.sh status`).
 2. Write a plan YAML with `mode: background` (and optionally `ttl_sec`).
@@ -136,6 +184,7 @@ Call `cleanup-stale.sh [--abandon]` after a crash or long idle period.
 | `dispatch.sh` | no (internal) | Single-task prepare, spawn, confirm .lock appeared |
 | `verify-cwd.sh` | no (internal) | Fail-closed CWD verification |
 | `validate-run.sh` | no (internal) | Post-hoc event stream validation |
+| `poll-all.sh` | yes | Poll all active tasks in a project root, return summary JSON |
 | `watcher.sh` | yes | Daemon entry point — start/stop/status |
 | `watcher-process.sh` | no (internal) | Process a single plan from the watch directory |
 
@@ -273,6 +322,33 @@ Each iteration logs the event line count and mtime. Exits with:
 
 Defaults: `--interval 15`, `--max-polls 12` (up to 180s),
 `--stale-threshold 60`. Use `--max-polls 16` for complex tasks (up to 240s).
+
+## poll-all.sh
+
+```
+poll-all.sh --root <project-root> [--interval <sec>] [--max-polls <n>]
+```
+
+Polls all active tasks in a project root and returns a summary JSON.
+Scans `.subagents/*/.lock` for active tasks, checks events line count
+and mtime for each, and returns a consolidated report.
+
+Exits with:
+
+- **0** — all tasks completed (no locks found)
+- **1** — one or more tasks still active
+
+Output (stdout):
+
+```json
+{
+  "tasks": [
+    {"id": "fix-auth", "lines": 42, "mtime": 1717000000, "age_sec": 15},
+    {"id": "refactor-api", "lines": 18, "mtime": 1717000010, "age_sec": 5}
+  ],
+  "active": 2
+}
+```
 
 ## subagent-cleanup.sh
 
