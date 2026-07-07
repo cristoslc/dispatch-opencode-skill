@@ -44,7 +44,6 @@ scan_tasks() {
   local tasks_json="["
   local first=1
   local active=0
-  local completed=0
 
   for lock in "$ROOT/.subagents"/*/.lock; do
     [ -f "$lock" ] || continue
@@ -71,12 +70,11 @@ scan_tasks() {
   done
 
   tasks_json+="]"
-  printf '{"tasks":%s,"active":%d,"completed":%d}\n' "$tasks_json" "$active" "$completed"
+  printf '{"tasks":%s,"active":%d}\n' "$tasks_json" "$active"
 }
 
 # Single scan mode
 if [ -z "$INTERVAL" ] && [ -z "$MAX_POLLS" ]; then
-  scan_tasks
   result=$(scan_tasks)
   echo "$result"
   active=$(echo "$result" | python3 -c "import sys,json; print(json.load(sys.stdin)['active'])")

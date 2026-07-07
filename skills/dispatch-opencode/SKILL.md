@@ -346,8 +346,7 @@ Output (stdout):
     {"id": "fix-auth", "lines": 42, "mtime": 1717000000, "age_sec": 15},
     {"id": "refactor-api", "lines": 18, "mtime": 1717000010, "age_sec": 5}
   ],
-  "active": 2,
-  "completed": 0
+  "active": 2
 }
 ```
 
