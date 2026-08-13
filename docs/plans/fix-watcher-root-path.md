@@ -64,6 +64,12 @@ matches every other script in the skill (`run-plan.sh`, `dispatch.sh`,
 - Update the "Workflow 4: Background dispatch" section step 1 to show
   `watcher.sh status --root <project-root>`.
 
+### `docs/spec/Proposed/(SPEC-001)-Watcher-Daemon-Script/(SPEC-001)-Watcher-Daemon-Script.md`
+
+- Update the `watcher.sh start`/`stop`/`status` usage lines (lines 34-36,
+  68-70) to include `--root`, so the Proposed spec does not drift from the
+  implemented interface.
+
 ### `docs/plans/fix-watcher-root-path.md`
 
 - This plan. Update here as needed.
