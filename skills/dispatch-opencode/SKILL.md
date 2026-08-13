@@ -165,7 +165,7 @@ Call `cleanup-stale.sh [--abandon]` after a crash or long idle period.
 Use this when the agent will not be around to poll. Requires the watcher
 daemon to be running.
 
-1. Ensure the watcher daemon is running (`watcher.sh status`).
+1. Ensure the watcher daemon is running (`watcher.sh status --root <project-root>`).
 2. Write a plan YAML with `mode: background` (and optionally `ttl_sec`).
 3. Write the plan to `.subagents/watch/<plan-name>.yaml`.
 4. Continue working — the watcher picks it up, dispatches, polls, and
@@ -194,15 +194,19 @@ The watcher daemon (`watcher.sh`) is a persistent background process that
 monitors a directory for plan YAMLs and processes them autonomously.
 
 ```
-watcher.sh start [--watch-dir <path>] [--interval <sec>]
-watcher.sh stop
-watcher.sh status
+watcher.sh start --root <project-root> [--watch-dir <path>] [--interval <sec>]
+watcher.sh stop --root <project-root>
+watcher.sh status --root <project-root>
 ```
 
 - `start` — launches daemon, writes PID to `.subagents/watcher.pid`,
   logs to `.subagents/watcher.log`
 - `stop` — terminates daemon gracefully
 - `status` — returns JSON with running status, PID, active task count
+
+`--root` is required on all three subcommands. It sets the project root
+where `.subagents/` lives. Omitting it fails loudly; the script never
+guesses the root.
 
 The daemon must be running for background dispatch. If it is not running,
 write plans to `.subagents/watch/` anyway — they will be processed when

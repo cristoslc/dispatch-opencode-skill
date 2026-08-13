@@ -31,9 +31,9 @@ Operators and agents can start a watcher daemon that autonomously processes back
 ## External Behavior
 
 **`watcher.sh`** — the daemon entry point:
-- `watcher.sh start [--watch-dir <path>] [--interval <sec>]` — launches the daemon in the background, writes PID to `.subagents/watcher.pid`, logs to `.subagents/watcher.log`
-- `watcher.sh stop` — reads PID file, sends TERM, waits for graceful shutdown, removes PID file
-- `watcher.sh status` — checks if daemon is running, reports active tasks (scans for `.lock` files in `.subagents/`)
+- `watcher.sh start --root <project-root> [--watch-dir <path>] [--interval <sec>]` — launches the daemon in the background, writes PID to `.subagents/watcher.pid`, logs to `.subagents/watcher.log`
+- `watcher.sh stop --root <project-root>` — reads PID file, sends TERM, waits for graceful shutdown, removes PID file
+- `watcher.sh status --root <project-root>` — checks if daemon is running, reports active tasks (scans for `.lock` files in `.subagents/`)
 
 **`watcher-process.sh`** — processes a single plan file:
 - Called by the daemon for each new plan YAML found in the watch directory
@@ -65,9 +65,9 @@ Operators and agents can start a watcher daemon that autonomously processes back
 
 ## Acceptance Criteria
 
-1. **Start:** `watcher.sh start` launches the daemon, writes PID file, and begins polling the watch directory.
-2. **Stop:** `watcher.sh stop` terminates the daemon gracefully and removes the PID file.
-3. **Status:** `watcher.sh status` reports "running" with PID when active, "stopped" when not.
+1. **Start:** `watcher.sh start --root <project-root>` launches the daemon, writes PID file, and begins polling the watch directory.
+2. **Stop:** `watcher.sh stop --root <project-root>` terminates the daemon gracefully and removes the PID file.
+3. **Status:** `watcher.sh status --root <project-root>` reports "running" with PID when active, "stopped" when not.
 4. **Plan pickup:** Dropping a valid plan YAML into the watch directory causes the watcher to process it within one poll interval.
 5. **Dispatch:** The watcher calls `run-plan.sh` internally and dispatches all tasks in the plan.
 6. **Poll loop:** The watcher polls each dispatched task until completion, stuck, or TTL.

@@ -7,9 +7,9 @@
 #   status  — check if daemon is running
 #
 # Usage:
-#   watcher.sh start [--watch-dir <path>] [--interval <sec>]
-#   watcher.sh stop
-#   watcher.sh status
+#   watcher.sh start --root <project-root> [--watch-dir <path>] [--interval <sec>]
+#   watcher.sh stop --root <project-root>
+#   watcher.sh status --root <project-root>
 #
 # The daemon loop:
 #   1. Scan watch-dir for *.yaml / *.yml files
@@ -25,24 +25,35 @@ log() { printf 'watcher: %s\n' "$*" >&2; }
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROCESS_SCRIPT="$SCRIPT_DIR/watcher-process.sh"
 
+require_root() {
+  if [ -z "${ROOT:-}" ]; then
+    err "missing required flag: --root <project-root>"
+  fi
+  if [ ! -d "$ROOT" ]; then
+    err "project root does not exist: $ROOT"
+  fi
+}
+
 SUBCOMMAND="${1:-}"
 shift 2>/dev/null || true
 
 case "$SUBCOMMAND" in
   start)
+    ROOT=""
     WATCH_DIR=""
     INTERVAL=15
 
     while [ "$#" -gt 0 ]; do
       case "$1" in
+        --root)      ROOT="$2"; shift 2 ;;
         --watch-dir) WATCH_DIR="$2"; shift 2 ;;
         --interval)  INTERVAL="$2"; shift 2 ;;
         *)           err "unknown flag: $1" ;;
       esac
     done
 
-    # Determine project root (where .subagents/ lives)
-    PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+    require_root
+    PROJECT_ROOT="$ROOT"
 
     # Default watch dir
     if [ -z "$WATCH_DIR" ]; then
@@ -100,7 +111,15 @@ case "$SUBCOMMAND" in
     ;;
 
   stop)
-    PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+    ROOT=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --root) ROOT="$2"; shift 2 ;;
+        *)      err "unknown flag: $1" ;;
+      esac
+    done
+    require_root
+    PROJECT_ROOT="$ROOT"
     PID_FILE="$PROJECT_ROOT/.subagents/watcher.pid"
 
     if [ ! -f "$PID_FILE" ]; then
@@ -140,7 +159,15 @@ case "$SUBCOMMAND" in
     ;;
 
   status)
-    PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+    ROOT=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --root) ROOT="$2"; shift 2 ;;
+        *)      err "unknown flag: $1" ;;
+      esac
+    done
+    require_root
+    PROJECT_ROOT="$ROOT"
     PID_FILE="$PROJECT_ROOT/.subagents/watcher.pid"
     LOG_FILE="$PROJECT_ROOT/.subagents/watcher.log"
 
@@ -170,6 +197,6 @@ case "$SUBCOMMAND" in
     ;;
 
   *)
-    err "usage: watcher.sh {start|stop|status} [options]"
+    err "usage: watcher.sh {start|stop|status} --root <project-root> [options]"
     ;;
 esac
