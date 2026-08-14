@@ -21,9 +21,11 @@ ok()  { printf 'test: PASS %s\n' "$*"; }
 WORK=$(mktemp -d /tmp/oc-watcher-persist.XXXXXX)
 trap '[ "$KEEP" -eq 1 ] && echo "kept $WORK" || rm -rf "$WORK"' EXIT
 PID_FILE="$WORK/.subagents/watcher.pid"
+START_LOG="$WORK/start.stderr.log"
 
-# 1. start --root launches the daemon and writes a PID file
-"$WATCHER" start --root "$WORK" --interval 1 >/dev/null 2>&1 || err "start --root failed"
+# 1. start --root launches the daemon and writes a PID file.
+# Capture stderr so we can later compare the daemon's own log PID to the PID file.
+"$WATCHER" start --root "$WORK" --interval 1 >/dev/null 2>"$START_LOG" || err "start --root failed"
 [ -f "$PID_FILE" ] || err "PID file not created: $PID_FILE"
 ok "start --root created PID file"
 
@@ -43,7 +45,15 @@ STATUS_PID=$(echo "$OUT" | python3 -c "import json,sys; print(json.load(sys.stdi
 [ "$FILE_PID" != "$$" ] || err "PID file recorded the parent start PID"
 ok "PID file PID is live and matches status (persistence verified)"
 
-# 4. stop --root terminates the daemon and removes the PID file
+# 4. The daemon's start log line must report the same PID as the PID file,
+# not the parent shell's PID. Regression check for the $$-vs-$BASHPID bug.
+LOG_PID=$(grep -o 'daemon started PID=[0-9]*' "$START_LOG" | grep -o '[0-9]*$' || true)
+[ -n "$LOG_PID" ] || err "daemon start log line missing; log: $(cat "$START_LOG")"
+[ "$LOG_PID" = "$FILE_PID" ] || err "log PID $LOG_PID != PID file PID $FILE_PID"
+[ "$LOG_PID" != "$$" ] || err "log recorded the parent start PID"
+ok "daemon log PID matches PID file PID (log not using parent PID)"
+
+# 5. stop --root terminates the daemon and removes the PID file
 "$WATCHER" stop --root "$WORK" >/dev/null 2>&1 || err "stop --root failed"
 [ ! -f "$PID_FILE" ] || err "PID file not removed after stop"
 OUT=$("$WATCHER" status --root "$WORK" 2>/dev/null) || err "status after stop failed"

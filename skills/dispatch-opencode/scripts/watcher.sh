@@ -83,7 +83,7 @@ case "$SUBCOMMAND" in
       # Trap SIGTERM for clean shutdown
       trap 'log "received SIGTERM, exiting"; exit 0' TERM
 
-      log "daemon started PID=$$ watch-dir=$WATCH_DIR interval=${INTERVAL}s"
+      log "daemon started PID=$BASHPID watch-dir=$WATCH_DIR interval=${INTERVAL}s"
 
       while true; do
         # Scan for plan files
