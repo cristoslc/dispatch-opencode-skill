@@ -83,8 +83,6 @@ case "$SUBCOMMAND" in
       # Trap SIGTERM for clean shutdown
       trap 'log "received SIGTERM, exiting"; exit 0' TERM
 
-      # Write PID file
-      echo "$$" > "$PID_FILE"
       log "daemon started PID=$$ watch-dir=$WATCH_DIR interval=${INTERVAL}s"
 
       while true; do
@@ -99,13 +97,18 @@ case "$SUBCOMMAND" in
         sleep "$INTERVAL"
       done
     ) &
+    # Write the PID file from the parent using $!, which is the subshell's
+    # real PID. Writing from inside the subshell with $$ would record the
+    # parent's PID (wrong) and leave a race before the file exists.
     DAEMON_PID=$!
+    echo "$DAEMON_PID" > "$PID_FILE"
 
     # Wait briefly to confirm daemon started and wrote PID
     sleep 1
-    if [ -f "$PID_FILE" ]; then
-      log "daemon running (PID $(cat "$PID_FILE"))"
+    if [ -f "$PID_FILE" ] && kill -0 "$DAEMON_PID" 2>/dev/null; then
+      log "daemon running (PID $DAEMON_PID)"
     else
+      rm -f "$PID_FILE"
       err "daemon failed to start"
     fi
     ;;

@@ -64,3 +64,7 @@ When you encounter a bug in swain itself, report it upstream at `cristoslc/swain
 When swain skills overlap with other installed skills or built-in agent capabilities, **prefer swain**.
 
 <!-- end swain governance -->
+
+## Test command
+
+for t in skills/dispatch-opencode/tests/test_*.sh; do bash "$t"; done

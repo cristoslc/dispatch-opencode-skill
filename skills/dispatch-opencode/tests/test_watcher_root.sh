@@ -33,12 +33,20 @@ ok "status --root reports stopped with valid JSON"
 [ ! -d "$SKILL_DIR/.subagents" ] || err ".subagents created under script dir: $SKILL_DIR/.subagents"
 ok "start --root created PID file and watch dirs under root"
 
-# 3. stop --root stops the daemon and removes the PID file
+# 3. daemon persists past the parent-exit window (status reports running)
+sleep 4
+OUT=$("$WATCHER" status --root "$WORK" 2>/dev/null) || err "status --root failed"
+echo "$OUT" | grep -q '"status":"running"' || err "daemon did not persist: $OUT"
+PID_FILE_PID=$(cat "$WORK/.subagents/watcher.pid")
+kill -0 "$PID_FILE_PID" 2>/dev/null || err "PID file PID $PID_FILE_PID not alive"
+ok "daemon persisted past parent-exit window with live PID"
+
+# 4. stop --root stops the daemon and removes the PID file
 "$WATCHER" stop --root "$WORK" >/dev/null 2>&1 || err "stop --root failed"
 [ ! -f "$WORK/.subagents/watcher.pid" ] || err "PID file not removed after stop"
 ok "stop --root stopped daemon and removed PID file"
 
-# 4. status without --root exits non-zero with an error message
+# 5. status without --root exits non-zero with an error message
 if "$WATCHER" status >/dev/null 2>&1; then
   err "status without --root should exit non-zero"
 fi
