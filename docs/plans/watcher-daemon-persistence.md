@@ -71,11 +71,24 @@ On `start`, if a stale PID file exists but the recorded PID is not alive, remove
 ## Files touched
 
 ```
+AGENTS.md                                       [MODIFY: add ## Test command declaration]
 skills/dispatch-opencode/
   scripts/watcher.sh                          [MODIFY: correct PID write, robust startup]
   tests/test_watcher_persistence.sh            [NEW]
   tests/test_watcher_root.sh                  [MODIFY: verify persistence]
 ```
+
+## Test command declaration
+
+The project has a test suite (`skills/dispatch-opencode/tests/test_*.sh`) but no `## Test command` in AGENTS.md. The sashay gate (step 7) requires one. Add to AGENTS.md:
+
+```markdown
+## Test command
+
+for t in skills/dispatch-opencode/tests/test_*.sh; do bash "$t"; done
+```
+
+This matches the documented workflow in `DEVELOPER-WORKFLOWS.md`.
 
 ## Out of scope
 
